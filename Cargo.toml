@@ -7,6 +7,6 @@ description = "Web-based code editor for subserver developers on the Lighthouse 
 homepage   = "https://github.com/LighthouseMC"
 repository = "https://github.com/LighthouseMC/VoxidianEditor"
 
-edition = "2021"
+edition = "2024"
 
 [dependencies]
