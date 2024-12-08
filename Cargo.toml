@@ -1,0 +1,12 @@
+[package]
+name        = "voxidian-editor"
+version     = "0.1.0"
+authors     = ["LighthouseMC <https://github.com/LighthouseMC>"]
+description = "Web-based code editor for subserver developers on the Lighthouse Minecraft server."
+
+homepage   = "https://github.com/LighthouseMC"
+repository = "https://github.com/LighthouseMC/VoxidianEditor"
+
+edition = "2021"
+
+[dependencies]
