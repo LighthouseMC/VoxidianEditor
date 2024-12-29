@@ -92,7 +92,7 @@
                 gap: 5px;
                 visibility: hidden;
                 opacity: 0;
-                transition: opacity 0.25s;
+                transition: opacity 0.125s;
                 z-index: 1;
             }
             #subserver_properties_editor h1 {
@@ -156,6 +156,55 @@
                 background-color: rgb(255,255,255,0.125);
             }
         </style>
+        <style> /* File tree */
+            #editor_filetree {
+                width: 100%;
+                height: 100%;
+                padding-left: 8px;
+                font-size: 10.25pt;
+                font-family: "Noto Sans", serif;
+                font-weight: 400;
+                font-style: normal;
+            }
+            #editor_filetree * {
+                overflow: visible;
+                user-select: none;
+            }
+            #editor_filetree ul {
+                list-style-type: none;
+                color: #ffffff;
+            }
+            #editor_filetree li {
+                height: max-content;
+            }
+            #editor_filetree li div {
+                width: 100%;
+                padding-top: 2px;
+                padding-bottom: 2px;
+                background-color: rgb(255,255,255,0.0);
+                transition: background-color 0.125s;
+                cursor: pointer;
+            }
+            #editor_filetree li div:hover {
+                background-color: rgb(255,255,255,0.125);
+            }
+            #editor_filetree .editor_filetree_fold:before {
+                content: "❭";
+                color: #ffffff;
+                display: inline-block;
+                margin-right: 6px;
+            }
+            #editor_filetree .editor_filetree_fold.editor_filetree_unfolded:before {
+                transform: rotate(90deg);
+            }
+            #editor_filetree .editor_filetree_nest {
+                display: none;
+            }
+            #editor_filetree .editor_filetree_nest.editor_filetree_nest_unfolded {
+                display: block;
+                margin-left: 12px;
+            }
+        </style>
         <style> /* File tabs */
             #editor_filetabs {
                 width: 100%;
@@ -183,6 +232,19 @@
                         <button>Save</button>
                         <hr />
                     </div>
+                </div>
+                <div id="editor_filetree">
+                    <ul>
+                        <li><div class="editor_filetree_fold">src</div><ul class="editor_filetree_nest">
+                            <li><div class="editor_filetree_fold">assets</div><ul class="editor_filetree_nest">
+                            </ul></li>
+                            <li><div>add.rs</div></li>
+                            <li><div>lib.rs</div></li>
+                        </ul></li>
+                        <li><div>build.rs</div></li>
+                        <li><div>build.sh</div></li>
+                        <li><div>Cargo.toml</div></li>
+                    </ul>
                 </div>
             </div>
             <button id="editor_resize_hsplit" onmousedown="start_dragging_filetree_resize();"></button>
@@ -240,10 +302,19 @@
                             subserver_properties_editor_open = false;
                             subserver_properties_editor_closing = false;
                             e_subserver_properties_editor.style.visibility = "hidden";
-                        }, 250);
+                        }, 125);
                     }
                 }
             });
+        </script>
+        <script> // File tree fold/unfold
+            const togglers = document.getElementsByClassName("editor_filetree_fold");
+            for (var i = 0; i < togglers.length; i++) {
+                togglers[i].addEventListener("click", function() {
+                    this.classList.toggle("editor_filetree_unfolded");
+                    this.parentElement.querySelector(".editor_filetree_nest").classList.toggle("editor_filetree_nest_unfolded");
+                });
+            }
         </script>
     </body>
 </html>
