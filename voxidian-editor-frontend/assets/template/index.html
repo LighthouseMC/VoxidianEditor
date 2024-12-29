@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>LighthouseMC</title>
+        <link rel="icon" type="image/png" href="/assets/image/logo_transparent.png">
+        <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Russo+One&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+        <style> /* Page */
+            * {
+                margin: 0;
+                padding: 0;
+            }
+            html {
+                width: 100%;
+                height: 100%;
+            }
+            body {
+                width: 100%;
+                height: 100%;
+                background-color: #ececec;
+            }
+            a {
+                color: rgb(0,0,0,0.5);
+                font-style: italic;
+            }
+            hr {
+                height: 1px;
+                background-color: rgb(192,192,192,0.5);
+                border: none;
+            }
+        </style>
+        <style> /* Header */
+            #header {
+                background-image: linear-gradient(to left, #007fff, #ff007f);
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+            }
+            #header #header_background {
+                background-image: url("/assets/image/logo_transparent.png");
+                background-repeat: no-repeat;
+                background-size: calc(100%-25px) auto;
+                background-position: center;
+                padding: 50px;
+                width: max-content;
+            }
+            #header #header_title h1 {
+                font-size: 75pt;
+                font-family: "Russo One", serif;
+                font-weight: 400;
+                font-style: normal;
+                color: #ffffff;
+                width: max-content;
+                text-shadow: -5px -5px 0 #000, 5px -5px 0 #000, -5px 5px 0 #000, 5px 5px 0 #000;
+            }
+            #header #header_info {
+                margin-left: auto;
+                margin-right: 50px;
+                padding: 15px;
+                background-color: rgb(0,0,0,0.75);
+                border-radius: 15px;
+                cursor: grab;
+                user-select: none;
+            }
+            #header #header_info h3 {
+                font-size: 15pt;
+                font-family: "Roboto Condensed", serif;
+                font-weight: 625;
+                font-style: normal;
+                color: #ffffff;
+                text-align: right;
+            }
+            #header #header_info h3#header_address_copy {
+                text-align: center;
+            }
+            #header #header_info h2 {
+                font-size: 20pt;
+                font-family: "Noto Sans", serif;
+                font-weight: 625;
+                font-style: normal;
+                color: #ffffff;
+                text-align: right;
+            }
+        </style>
+        <style> /* Tooltip */
+            .tooltip {
+                opacity: 0;
+                background-color: rgb(0,0,0,0.75);
+                color: #ffffff;
+                text-align: center;
+                padding: 7.5px;
+                border-radius: 6px;
+                position: absolute;
+                z-index: 1;
+                pointer-events: none;
+                transition: opacity 0.25s;
+                width: max-content;
+                max-width: 250px;
+            }
+            .tooltip.tooltip_bottom {
+                top: calc(100% + 5px);
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            :has(> .tooltip) {
+                position: relative;
+            }
+            :has(> .tooltip):hover .tooltip {
+                opacity: 1;
+            }
+        </style>
+        <style> /* Main region */
+            #main {
+                background-color: #f3f3f3;
+                margin-left: 225px;
+                margin-right: 225px;
+                min-width: 750px;
+                padding: 25px;
+                display: flex;
+                flex-direction: column;
+                gap: 25px;
+            }
+            #main h1 {
+                font-size: 20pt;
+                font-family: "Roboto Condensed", serif;
+                font-weight: 375;
+                font-style: normal;
+                color: #000000;
+            }
+            #main h2 {
+                font-size: 15pt;
+                font-family: "Roboto Condensed", serif;
+                font-weight: 375;
+                font-style: normal;
+                color: #000000;
+            }
+            #main .icon_grid {
+                margin: 15px;
+                display: flex;
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+            #main .icon_grid * {
+                font-family: "Roboto Condensed", serif;
+                font-style: normal;
+            }
+            #main .icon_grid > div {
+                width: 75px;
+                height: 75px;
+                border-radius: 7.5px;
+                background-color: #ffffff;
+                box-shadow: rgb(38, 57, 77) 0px 5px 7px -3px;
+            }
+            #main .icon_grid img {
+                width: 100%;
+                height: 100%;
+                border-radius: 7.5px;
+            }
+            #main .icon_grid h3 {
+                font-size: 15pt;
+                font-weight: 375;
+            }
+            #main .icon_grid h4 {
+                font-size: 13.75pt;
+                font-weight: 312.5;
+            }
+            #main .icon_grid h5::before {
+                content: "("
+            }
+            #main .icon_grid h5::after {
+                content: ")"
+            }
+            #main .icon_grid h5 {
+                font-size: 11pt;
+                font-weight: 375;
+                font-style: italic;
+            }
+            #main .icon_grid hr {
+                margin-top: 5px;
+                margin-bottom: 5px;
+            }
+        </style>
+        <style> /* Footer region */
+            #footer {
+                margin-left: 225px;
+                margin-right: 225px;
+                min-width: 750px;
+                padding: 25px;
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+                font-size: 12.5pt;
+                font-family: "Roboto Condensed", serif;
+                font-weight: 375;
+                font-style: normal;
+                color: rgb(0,0,0,0.375);
+            }
+            #footer h1 {
+                font-size: 14pt;
+            }
+            #footer #footer_license img {
+                height: 18px;
+            }
+        </style>
+    </head>
+    <body>
+
+        <div id="header">
+            <div id="header_background"><div id="header_title"><h1>LighthouseMC</h1></div></div>
+            <div id="header_info" onclick="click_header_info();" onmouseover="hover_header_info();", onmouseout="unhover_header_info();">
+                <h3>Connect at</h3>
+                <h2 id="header_address">192.168.1.214:25565</h2>
+                <span class="tooltip tooltip_bottom" style="width: 137.5px;"><h3 id="header_address_copy">Click to Copy</h3></span>
+            </div>
+        </div>
+        <div id="main">
+
+            <div>
+                <h1>Languages</h1>
+                <h2>Here's a list of all of the languages that currently have pre-built templates.</h2>
+                <div class="icon_grid">
+                    <div><a href="https://www.rust-lang.org" target="_blank" rel="noopener noreferrer"><img src="https://raw.githubusercontent.com/rust-lang/rust-artwork/refs/heads/master/logo/rust-logo-blk.svg" /><span class="tooltip tooltip_bottom"><h3>Rust</h3><hr /><h4>A language empowering everyone to build reliable and efficient software.</h4></span></a></div>
+                    <div><a href="https://ziglang.org" target="_blank" rel="noopener noreferrer"><img src="https://raw.githubusercontent.com/ziglang/logo/refs/heads/master/zig-mark.svg" /><span class="tooltip tooltip_bottom"><h3>Zig</h3><hr /><h4>Zig is a general-purpose programming language and toolchain for maintaining robust, optimal and reusable software.</h4></span></a></div>
+                    <div><img src="https://upload.wikimedia.org/wikipedia/commons/1/1f/WebAssembly_Logo.svg" /><span class="tooltip tooltip_bottom"><h3>Webassembly Text Format</h3></span></div>
+                    <div><span class="tooltip tooltip_bottom"><h3>Blank</h3><hr /><h4>Build your own project from scratch</h4></span></div>
+                </div>
+                <h2><a href="https://github.com/LighthouseMC/LighthouseTemplates" target="_blank" rel="noopener noreferrer">Contribute support for a new language</a></h2>
+            </div>
+
+            <hr />
+
+            <div>
+                <h1>Contributors</h1>
+                <h2>Thanks to everyone who has helped to make this project possible!</h2>
+                <div class="icon_grid">
+                    <div><a href="https://github.com/Totobird-Creations" target="_blank" rel="noopener noreferrer"><img src="https://github.com/Totobird-Creations.png" /><span class="tooltip tooltip_bottom"><h3>Totobird-Creations</h3><h5>Totobird</h5></span></a></div>
+                    <div><a href="https://github.com/akarahdev" target="_blank" rel="noopener noreferrer"><img src="https://github.com/akarahdev.png" /><span class="tooltip tooltip_bottom"><h3>akarahdev</h3><h5>Endistic</h5></span></a></div>
+                </div>
+            </div>
+
+        </div>
+        <div id="footer">
+            <h1><a href="https://github.com/LighthouseMC" target="_blank" rel="noopener noreferrer">LighthouseMC</a></h1>
+            <p id="footer_license" xmlns:cc="http://creativecommons.org/ns#" xmlns:dct="http://purl.org/dc/terms/"><span property="dct:title">This site</span> by <a rel="cc:attributionURL dct:creator" property="cc:attributionName" href="https://github.com/Totobird-Creations" target="_blank" rel="noopener noreferrer">Totobird-Creation</a> is licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/?ref=chooser-v1" target="_blank" rel="license noopener noreferrer" style="display:inline-block;">Creative Commons Attribution-ShareAlike 4.0 International<img style="margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1" alt=""><img style="margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1" alt=""><img style="margin-left:3px;vertical-align:text-bottom;" src="https://mirrors.creativecommons.org/presskit/icons/sa.svg?ref=chooser-v1" alt=""></a></p>
+            <p>LighthouseMC is not affiliated with Mojang AB or Microsoft.</p>
+        </div>
+
+        <script> // Header address click to copy.
+            const e_header_address      = document.getElementById("header_address");
+            const e_header_address_copy = document.getElementById("header_address_copy");
+            var hovered_header_info = 0;
+            function click_header_info() {
+                navigator.clipboard.writeText(e_header_address.innerText);
+                e_header_address_copy.innerText = "Copied!";
+            }
+            function hover_header_info() {
+                hovered_header_info += 1;
+            }
+            function unhover_header_info() {
+                hovered_header_info -= 1;
+                setTimeout(function() {
+                    if (hovered_header_info == 0) {
+                        e_header_address_copy.innerText = "Click to Copy";
+                    }
+                }, 250);
+            }
+        </script>
+
+    </body>
+</html>
