@@ -21,10 +21,6 @@ version = "3.6"
 version = "1.13"
 
 
-[build-dependencies.walkdir]
-version = "2.5"
-
-
 [dev-dependencies.async-std]
 version = "*"
 features = [ "attributes" ]

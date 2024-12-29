@@ -24,12 +24,12 @@ impl EditorServer {
 
             // Root
             if (url == "/") {
-                return Response::html(include_str!("../voxidian-editor-frontend/assets/template/index.html"))
+                return Response::html(include_str!("assets/template/index.html"))
             }
 
             // Robots.txt
             if (url == "/robots.txt") {
-                return Response::text(include_str!("../voxidian-editor-frontend/assets/template/robots.txt"))
+                return Response::text(include_str!("assets/template/robots.txt"))
             }
 
             // Assets
@@ -37,22 +37,16 @@ impl EditorServer {
             try_route_asset!(url, "font/ttf", "/font/dejavu_sans_mono.ttf");
 
             // Editor
-            if (url == "/assets/code/editor.wasm") {
-                return Response::from_data("application/wasm", include_bytes!("../voxidian-editor-frontend/assets/code/voxidian-editor_bg.wasm"));
-            }
-            if (url == "/assets/code/editor.js") {
-                return Response::from_data("text/javascript", include_bytes!("../voxidian-editor-frontend/assets/code/voxidian-editor.js"));
-            }
             if (url.starts_with("/editor")) {
                 if let Some(instance_id) = url.strip_prefix("/editor/") {
-                    return Response::html(include_str!("../voxidian-editor-frontend/assets/template/editor.html"))
+                    return Response::html(include_str!("assets/template/editor.html"))
                 }
             }
 
         }
 
         // 4040
-        Response::html(include_str!("../voxidian-editor-frontend/assets/template/404.html")).with_status_code(404)
+        Response::html(include_str!("assets/template/404.html")).with_status_code(404)
     }
 
 }
@@ -60,6 +54,6 @@ impl EditorServer {
 
 macro try_route_asset( $url:expr, $mime:tt, $path:tt ) {
     if ($url == concat!("/assets", $path)) {
-        return Response::from_data($mime, include_bytes!(concat!("../voxidian-editor-frontend/assets", $path)));
+        return Response::from_data($mime, include_bytes!(concat!("assets", $path)));
     }
 }
