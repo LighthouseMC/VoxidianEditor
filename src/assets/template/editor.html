@@ -223,6 +223,7 @@
         <script> // Subserver properties editor
             const e_subserver_properties_editor = document.getElementById("subserver_properties_editor");
             var subserver_properties_editor_open = false;
+            var subserver_properties_editor_closing = false;
             function open_subserver_properties_editor() {
                 if (! subserver_properties_editor_open) {
                     subserver_properties_editor_open = true;
@@ -233,9 +234,11 @@
             document.addEventListener("mousedown", function(event) {
                 if (subserver_properties_editor_open) {
                     if (! e_subserver_properties_editor.contains(event.target)) {
+                        subserver_properties_editor_closing = true;
                         e_subserver_properties_editor.style.opacity = "0";
                         setTimeout(function() {
                             subserver_properties_editor_open = false;
+                            subserver_properties_editor_closing = false;
                             e_subserver_properties_editor.style.visibility = "hidden";
                         }, 250);
                     }
