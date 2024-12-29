@@ -20,6 +20,9 @@ version = "3.6"
 [dependencies.async-std]
 version = "1.13"
 
+[dependencies.const_format]
+version = "0.2"
+
 
 [dev-dependencies.async-std]
 version = "*"

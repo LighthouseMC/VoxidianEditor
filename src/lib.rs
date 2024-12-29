@@ -5,6 +5,7 @@ use std::io;
 use std::net::SocketAddr;
 use async_std::task::spawn_blocking;
 use rouille::{ Request, Response };
+use const_format::str_replace;
 
 
 pub struct EditorServer(());
@@ -39,7 +40,9 @@ impl EditorServer {
             // Editor
             if (url.starts_with("/editor")) {
                 if let Some(instance_id) = url.strip_prefix("/editor/") {
-                    return Response::html(include_str!("assets/template/editor.html"))
+                    return Response::html(
+                        str_replace!(str_replace!(str_replace!(include_str!("assets/template/editor.html"), "{{VOXIDIAN_EDITOR_VERSION}}", env!("CARGO_PKG_VERSION")), "{{VOXIDIAN_EDITOR_COMMIT}}", env!("VOXIDIAN_EDITOR_COMMIT")), "{{VOXIDIAN_EDITOR_COMMIT_HASH}}", env!("VOXIDIAN_EDITOR_COMMIT_HASH"))
+                    )
                 }
             }
 
