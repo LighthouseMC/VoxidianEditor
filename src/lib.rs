@@ -1,123 +1,116 @@
 #![feature(
-    decl_macro,
-    mpmc_channel
+    let_chains
 )]
 
 
 mod ws;
-use ws::*;
+mod handle;
+use handle::EditorHandleInner;
+pub use handle::EditorHandle;
+mod instance;
+use instance::EditorInstance;
+mod session;
+use session::EditorSession;
 
 
-use voxidian_database::VoxidianDB;
 use std::net::SocketAddr;
-use std::cell::LazyCell;
-use std::sync::{ mpsc, mpmc, Mutex };
-use std::error::Error;
-use std::collections::VecDeque;
+use std::io;
 use std::time::Duration;
-use rouille::{ Server, Request, Response };
-use rouille::websocket::{ self, Websocket };
+use async_std::stream::StreamExt;
+use async_std::future;
+use tide::{ self, Request, Response };
+use tide::http::mime::{ self, Mime };
+use tide_websockets::{ WebSocket, WebSocketConnection, Message };
 use const_format::str_replace;
+use uuid::Uuid;
 
 
-// Rouille was not designed for async, at all. However, I can't find ANY non-tokio webserver libraries.
-static WSR_TXRX : Mutex<LazyCell<(mpmc::Sender<mpsc::Receiver<Websocket>>, mpmc::Receiver<mpsc::Receiver<Websocket>>)>> = Mutex::new(LazyCell::new(|| mpmc::channel()));
-
-
-pub struct EditorServer {
-    server  : Server<fn(&Request) -> Response>,
-    wsr_rx  : mpmc::Receiver<mpsc::Receiver<Websocket>>,
-    ws_rxs  : VecDeque<mpsc::Receiver<Websocket>>,
-    clients : VecDeque<WSClient>
-}
+pub struct EditorServer(());
 impl EditorServer {
 
 
-    pub unsafe fn start<S : Into<SocketAddr>>(bind_addr : S) -> Result<Self, Box<dyn Error + Send + Sync + 'static>> {
+    pub async fn run<S : Into<SocketAddr>, F : Fn(EditorHandle) -> ()>(bind_addr : S, f : F) -> Result<(), io::Error> {
         let bind_addr = bind_addr.into();
-        Ok(Self {
-            server  : Self::create_server(bind_addr, Self::accept_request),
-            wsr_rx  : WSR_TXRX.lock().unwrap().1.clone(),
-            ws_rxs  : VecDeque::new(),
-            clients : VecDeque::new()
-        })
+        let mut server = tide::new();
+
+        let handle = EditorHandleInner::new();
+
+        server.at("/robots.txt").get(Self::handle_robotstxt);
+
+        server.at("/assets/image/logo_transparent.png").get(|req| Self::handle_asset(req, mime::PNG, include_bytes!("assets/image/logo_transparent.png")));
+
+        server.at("/").get(Self::handle_root);
+
+        server.at("/editor").get(Self::handle_editor);
+
+        server.at("/editor/ws").get(
+            WebSocket::new(move |req, stream| Self::handle_editor_ws(req, stream, bind_addr))
+                .with_protocols(&[env!("CARGO_PKG_NAME")])
+        );
+
+        server.at("*").get(Self::handle_404);
+
+        f(EditorHandle(handle));
+
+        server.listen(bind_addr).await
     }
-    // Forces a type-coersion.
-    #[inline(always)]
-    fn create_server<S : Into<SocketAddr>, F : Fn(&Request) -> Response + Send + Sync + 'static>(bind_addr : S, f : F) -> Server<F> {
-        Server::new(bind_addr.into(), f).unwrap()
+
+
+    async fn handle_robotstxt(_ : Request<()>) -> tide::Result {
+        Ok(Response::builder(200).content_type(mime::PLAIN).body(include_str!("assets/template/robots.txt")).build())
+    }
+
+    async fn handle_asset(_ : Request<()>, mime : Mime, data : &[u8]) -> tide::Result {
+        Ok(Response::builder(200).content_type(mime).body(data).build())
     }
 
 
-    fn accept_request(req : &Request) -> Response {
-        let url = req.url().strip_suffix("").map_or_else(|| req.url(), |url| url.to_string());
-        println!("{} {}", req.method(), url);
-        if (req.method() == "GET") {
+    async fn handle_root(_ : Request<()>) -> tide::Result {
+        Ok(Response::builder(200).content_type(mime::HTML).body(include_str!("assets/template/root.html")).build())
+    }
 
-            // Root
-            if (url == "/") {
-                return Response::html(include_str!("assets/template/index.html"))
-            }
 
-            // Robots.txt
-            if (url == "/robots.txt") {
-                return Response::text(include_str!("assets/template/robots.txt"))
-            }
+    async fn handle_editor(_ : Request<()>) -> tide::Result {
+        const EDITORWS0 : &'static str = include_str!("assets/template/editor.ws.js");
+        const EDITORWS  : &'static str = str_replace!(EDITORWS0, "{{VOXIDIAN_EDITOR_NAME}}", env!("CARGO_PKG_NAME"));
+        const EDITOR0   : &'static str = include_str!("assets/template/editor.html");
+        const EDITOR1   : &'static str = str_replace!(EDITOR0, "{{VOXIDIAN_EDITOR_VERSION}}", env!("CARGO_PKG_VERSION"));
+        const EDITOR2   : &'static str = str_replace!(EDITOR1, "{{VOXIDIAN_EDITOR_COMMIT}}", env!("VOXIDIAN_EDITOR_COMMIT"));
+        const EDITOR3   : &'static str = str_replace!(EDITOR2, "{{VOXIDIAN_EDITOR_COMMIT_HASH}}", env!("VOXIDIAN_EDITOR_COMMIT_HASH"));
+        const EDITOR    : &'static str = str_replace!(EDITOR3, "{{EMBED_EDITOR_WS_JS}}", EDITORWS);
+        Ok(Response::builder(200).content_type(mime::HTML).body(EDITOR).build())
+    }
 
-            // Assets
-            try_route_asset!(url, "image/png", "/image/logo_transparent.png");
-            try_route_asset!(url, "font/ttf", "/font/dejavu_sans_mono.ttf");
 
-            // Editor
-            if (url.starts_with("/editor")) {
-                if let Some(_) = url.strip_prefix("/editor/") { // TODO: instance_id
-                    const EDITORWS0 : &'static str = include_str!("assets/template/editor.ws.js");
-                    const EDITORWS  : &'static str = str_replace!(EDITORWS0, "{{VOXIDIAN_EDITOR_NAME}}", env!("CARGO_PKG_NAME"));
-                    const EDITOR0   : &'static str = include_str!("assets/template/editor.html");
-                    const EDITOR1   : &'static str = str_replace!(EDITOR0, "{{VOXIDIAN_EDITOR_VERSION}}", env!("CARGO_PKG_VERSION"));
-                    const EDITOR2   : &'static str = str_replace!(EDITOR1, "{{VOXIDIAN_EDITOR_COMMIT}}", env!("VOXIDIAN_EDITOR_COMMIT"));
-                    const EDITOR3   : &'static str = str_replace!(EDITOR2, "{{VOXIDIAN_EDITOR_COMMIT_HASH}}", env!("VOXIDIAN_EDITOR_COMMIT_HASH"));
-                    const EDITOR    : &'static str = str_replace!(EDITOR3, "{{EMBED_EDITOR_WS_JS}}", EDITORWS);
-                    return Response::html(EDITOR);
-                }
-            }
-            if (url == "/ws") {
-                return match (websocket::start(req, Some(env!("CARGO_PKG_NAME")))) {
-                    Err(err) => Response::text(format!("400 Bad Request: {}", err)).with_status_code(400),
-                    Ok((resp, websocket)) => {
-                        let _ = WSR_TXRX.lock().unwrap().0.send(websocket);
-                        resp
-                    }
-                };
-            }
-
+    async fn handle_editor_ws(req : Request<()>, mut stream : WebSocketConnection, bind_addr : SocketAddr) -> tide::Result<()> {
+        if let Some(host) = req.host() && let Ok(host) = host.parse::<SocketAddr>() && host == bind_addr {} else {
+            return Err(tide::Error::from_str(403, "403 Access Forbidden"));
         }
 
-        // 404
-        Response::html(include_str!("assets/template/404.html")).with_status_code(404)
+        let session_code = {
+            let bytes = Self::read_ws_message::<{ws::C2S_HANDSHAKE}>(&mut stream, Duration::from_secs(1)).await?;
+            let bytes = bytes.try_into().map_err(|_| tide::Error::from_str(400, "400 Bad Request"))?;
+            Uuid::from_bytes(bytes)
+        };
+
+        Ok(())
     }
 
 
-    pub fn update_ws(&mut self, db : &VoxidianDB) {
-        self.server.poll_timeout(Duration::ZERO);
-        while let Ok(ws_rxs) = self.wsr_rx.try_recv() {
-            self.ws_rxs.push_back(ws_rxs);
+    async fn read_ws_message<const PREFIX : u8>(stream : &mut WebSocketConnection, timeout : Duration) -> tide::Result<Vec<u8>> {
+        let Ok(message) = future::timeout(timeout, stream.next()).await else {
+            return Err(tide::Error::from_str(408, "408 Request Timeout"))
+        };
+        if let Some(Ok(Message::Binary(mut prefixed_data))) = message && prefixed_data.len() > 0 && prefixed_data.remove(0) == PREFIX {
+            return Ok(prefixed_data);
         }
-        self.ws_rxs.retain(|ws_rx| {
-            if let Ok(client) = ws_rx.try_recv() {
-                self.clients.push_back(WSClient::new(client));
-                false
-            } else { true }
-        });
-        self.clients.retain(|client| ! client.just_closed());
+        return Err(tide::Error::from_str(400, "400 Bad Request"))
     }
 
 
-}
-
-
-macro try_route_asset( $url:expr, $mime:tt, $path:tt ) {
-    if ($url == concat!("/assets", $path)) {
-        return Response::from_data($mime, include_bytes!(concat!("assets", $path)));
+    async fn handle_404(_ : Request<()>) -> tide::Result {
+        Ok(Response::builder(404).content_type(mime::HTML).body(include_str!("assets/template/404.html")).build())
     }
+
+
 }

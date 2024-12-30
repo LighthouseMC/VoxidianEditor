@@ -2,4 +2,4 @@
 Cargo.lock
 rustc-ice-*.txt
 
-test.db
+test.db*

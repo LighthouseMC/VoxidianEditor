@@ -1,15 +1,14 @@
-const C2S_ORDER_REQUEST_INITIAL_STATE = 0;
-const C2S_ORDER_PING                  = 0;
+const C2S_HANDSHAKE = 0;
 
 
-let pw = window.location.hash;
+let session_code = window.location.hash.slice(1);
 window.history.replaceState("", "", window.location.pathname);
 
 var socket_protocol = "ws:";
 if (location.protocol === "https:") {
     socket_protocol = "wss:";
 }
-const SOCKET = new WebSocket(socket_protocol + "//" + window.location.hostname + ":" + window.location.port + "/ws", "{{VOXIDIAN_EDITOR_NAME}}");
+const SOCKET = new WebSocket(socket_protocol + "//" + window.location.hostname + ":" + window.location.port + "/editor/ws", "{{VOXIDIAN_EDITOR_NAME}}");
 // TODO: Change to wss, or auto detect.
 var socket_queued_data = [];
 SOCKET.addEventListener("close", (event) => {
@@ -17,7 +16,7 @@ SOCKET.addEventListener("close", (event) => {
 });
 
 SOCKET.addEventListener("open", (_) => {
-    send_c2s_order(C2S_ORDER_REQUEST_INITIAL_STATE, new Uint8Array(0));
+    send_c2s_order(C2S_HANDSHAKE, new TextEncoder().encode(session_code));
 });
 
 SOCKET.addEventListener("message", (event) => {
@@ -32,7 +31,7 @@ SOCKET.addEventListener("message", (event) => {
 function send_c2s_order(prefix, data) {
     let final_data = new Uint8Array(data.length + 1);
     final_data.set(prefix);
-    final_data.set(1, data);
+    final_data.set(data, 1);
     let buffer = final_data.buffer.slice(final_data.byteOffset, final_data.byteLength + final_data.byteOffset);
     SOCKET.send(buffer);
 }

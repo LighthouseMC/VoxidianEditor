@@ -17,14 +17,20 @@ unused_parens = "allow"
 [dependencies.voxidian-database]
 path = "../voxidian-database"
 
-[dependencies.rouille]
-version = "3.6"
+[dependencies.tide]
+version = "0.16"
+[dependencies.tide-websockets]
+version = "0.4"
 
 [dependencies.async-std]
 version = "1.13"
 
 [dependencies.const_format]
 version = "0.2"
+
+[dependencies.uuid]
+version  = "1.11"
+features = [ "v4" ]
 
 
 [dev-dependencies.async-std]
