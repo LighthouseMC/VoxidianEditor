@@ -255,7 +255,7 @@
         <script> // Header address click to copy.
             const e_header_address      = document.getElementById("header_address");
             const e_header_address_copy = document.getElementById("header_address_copy");
-            var hovered_header_info = 0;
+            let hovered_header_info = 0;
             function click_header_info() {
                 navigator.clipboard.writeText(e_header_address.innerText);
                 e_header_address_copy.innerText = "Copied!";

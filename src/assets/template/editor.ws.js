@@ -6,7 +6,7 @@ const e_subserver_properties_editor_description = document.getElementById("subse
 const e_template_subserver_owner_name           = document.getElementsByClassName("template_subserver_owner_name");
 
 const e_editor_filetree_root = document.getElementById("editor_filetree_root");
-var filetree_path_element = [{ is_root : true, file_path : "", children : e_editor_filetree_root }];
+let filetree_path_element = [{ is_root : true, file_path : "", children : e_editor_filetree_root }];
 
 
 const C2S_HANDSHAKE = 0;
@@ -15,11 +15,11 @@ const C2S_KEEPALIVE = 1;
 const S2C_INITIAL_STATE = 0;
 const S2C_KEEPALIVE     = 1;
 
-var keepalive_ping_index = 0;
+let keepalive_ping_index = 0;
 
 
 function MessageBuf(bytes) {
-    var buf = {
+    let buf = {
         inner : bytes,
         head : 0
     };
@@ -41,13 +41,13 @@ function MessageBuf(bytes) {
 let session_code = window.location.hash.slice(1);
 window.history.replaceState("", "", window.location.pathname);
 
-var socket_protocol = "ws:";
+let socket_protocol = "ws:";
 if (location.protocol === "https:") {
     socket_protocol = "wss:";
 }
 const SOCKET = new WebSocket(socket_protocol + "//" + window.location.hostname + ":" + window.location.port + "/editor/ws", "{{VOXIDIAN_EDITOR_NAME}}");
 // TODO: Change to wss, or auto detect.
-var socket_queued_data = [];
+let socket_queued_data = [];
 SOCKET.addEventListener("close", (event) => {
     // TODO: Disconnected popup
 });
@@ -75,35 +75,45 @@ function send_c2s_order(prefix, data) {
 
 function handle_s2c_order(prefix, data) {
 
+
     if (prefix == S2C_INITIAL_STATE) {
-        var buf = MessageBuf(data);
+        let buf = MessageBuf(data);
         let subserver_id          = u32ToInt(buf.read(4));
         let subserver_name        = buf.read_str();
         let subserver_description = buf.read_str();
         let subserver_owner_name  = buf.read_str();
         let file_entity_count = u32ToInt(buf.read(4));
-        for (var i = 0; i < file_entity_count; i++) {
+        for (let i = 0; i < file_entity_count; i++) {
             let file_id     = u32ToInt(buf.read(4));
             let is_dir      = buf.read(1)[0] != 0;
             let file_path   = buf.read_str();
             let file_name   = file_path.split("/").slice(-1)[0];
-            var element     = document.createElement("li");
-            var children;
-            if (is_dir) {
-                element.innerHTML = "<div class=\"editor_filetree_fold\">" + file_name + "</div><ul class=\"editor_filetree_nest\"></ul>";
-                children = element.getElementsByClassName("editor_filetree_nest")[0];
-            } else {
-                element.innerHTML = "<div> " + file_name + "</div>"; // TODO: Icon
-                children = element;
-            }
-            filetree_path_element.push({
+            let element     = document.createElement("li");
+            let children;
+            let data = {
                 file_path           : file_path,
                 file_path_lowercase : file_path.toLowerCase(),
-                file_name           : file_name,
                 is_dir              : is_dir,
                 main                : element,
-                children            : children
-            });
+            };
+            if (is_dir) {
+                let fold = document.createElement("div");
+                fold.classList = "editor_filetree_fold";
+                fold.innerText = file_name;
+                element.appendChild(fold);
+                let nest = document.createElement("ul");
+                nest.classList = "editor_filetree_nest";
+                element.appendChild(nest);
+                fold.addEventListener("click", function() {
+                    fold.classList.toggle("editor_filetree_unfolded");
+                    nest.classList.toggle("editor_filetree_nest_unfolded");
+                });
+                data.children = nest;
+            } else {
+                element.innerHTML = "<div><i class=\"" + fnameToIcon(file_name) + "\"></i> " + file_name + "</div>";
+                data.children = element;
+            }
+            filetree_path_element.push(data);
         }
         filetree_path_element = filetree_path_element.sort((a, b) => {
             if (a.is_dir) {
@@ -131,46 +141,37 @@ function handle_s2c_order(prefix, data) {
             }
         });
 
-        for (var i = 0; i < e_template_subserver_id.length; i++) {
+        for (let i = 0; i < e_template_subserver_id.length; i++) {
             e_template_subserver_id[i].innerText = "" + subserver_id;
         }
-        for (var i = 0; i < e_template_subserver_name.length; i++) {
+        for (let i = 0; i < e_template_subserver_name.length; i++) {
             e_template_subserver_name[i].innerText = subserver_name;
         }
         e_subserver_properties_editor_name.value = subserver_name;
-        for (var i = 0; i < e_template_subserver_description.length; i++) {
+        for (let i = 0; i < e_template_subserver_description.length; i++) {
             e_template_subserver_description[i].innerText = subserver_description;
         }
         e_subserver_properties_editor_description.value = subserver_description;
-        for (var i = 0; i < e_template_subserver_owner_name.length; i++) {
+        for (let i = 0; i < e_template_subserver_owner_name.length; i++) {
             e_template_subserver_owner_name[i].innerText = subserver_owner_name;
         }
 
-        for (var i = 0; i < filetree_path_element.length; i++) {
+        for (let i = 0; i < filetree_path_element.length; i++) {
             let entry = filetree_path_element[i];
             if (entry.is_root !== true) {
                 let parent_path = entry.file_path.split("/").slice(0, -1).join("/");
                 let parent      = filetree_path_element.find((e) => e.file_path == parent_path);
                 parent.children.appendChild(entry.main);
-                if (entry.is_dir) {
-                    let fold = entry.main.querySelector(".editor_filetree_fold");
-                    fold.addEventListener("click", function() {
-                        fold.classList.toggle("editor_filetree_unfolded");
-                        entry.main.querySelector(".editor_filetree_nest").classList.toggle("editor_filetree_nest_unfolded");
-                    });
-                } else {
-                    let icon = document.createElement("i");
-                    icon.classList = fnameToIcon(entry.file_name);
-                    entry.main.querySelector("div").insertAdjacentElement("afterbegin", icon);
-                }
             }
         }
     }
+
 
     else if (prefix == S2C_KEEPALIVE) {
         send_c2s_order(C2S_KEEPALIVE, intToU32(keepalive_ping_index));
         keepalive_ping_index = (keepalive_ping_index + 1) % 4294967295;
     }
+
 
 }
 

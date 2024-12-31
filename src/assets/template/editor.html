@@ -54,19 +54,9 @@
                 border-right-color: rgba(128,128,128,1);
                 background-color: rgba(128,128,128,1);
             }
-            #editor_right #editor_right_background {
-                width: 100%;
-                height: 100%;
-                background-image: url("/assets/image/logo_transparent.png");
-                background-position: center;
-                background-repeat: no-repeat;
-                background-size: auto 37.5%;
-                filter: grayscale(100%) invert(100%) brightness(12.5%);
-            }
             #editor_right #editor_right_container {
                 width: 100%;
                 height: 100%;
-                visibility: hidden; /* TODO: Toggle on file opened */
             }
             hr {
                 height: 1px;
@@ -242,7 +232,7 @@
                 opacity: 0;
             }
             .icon {
-                opacity: 0.5;
+                opacity: 1;
             }
         </style>
         <style> /* File tabs */
@@ -301,7 +291,63 @@
             }
         </style>
         <style> /* Code editor */
-            #editor_code {
+            #editor_right_main_container {
+                position: relative;
+                width: 100%;
+                height: 100%;
+            }
+            #editor_right_main_container #editor_right_main_noopen {
+                position: absolute;
+                left: 0;
+                right: 0;
+                width: 100%;
+                height: 100%;
+                background-image: url("/assets/image/logo_transparent.png");
+                background-position: center;
+                background-repeat: no-repeat;
+                background-size: auto 37.5%;
+                filter: grayscale(100%) invert(100%) brightness(12.5%);
+            }
+            #editor_right_main_container #editor_right_main_nontext {
+                position: absolute;
+                left: 0;
+                right: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+            }
+            #editor_right_main_container #editor_right_main_nontext h1 {
+                margin: 0 auto;
+                max-width: 450px;
+                font-size: 44pt;
+                font-family: "Roboto Condensed", serif;
+                font-weight: 400;
+                font-style: normal;
+                color: #ffd370;
+            }
+            #editor_right_main_container #editor_right_main_nontext h2 {
+                margin: 0 auto;
+                max-width: 450px;
+                font-size: 11pt;
+                font-family: "Noto Sans", serif;
+                font-weight: 400;
+                font-style: normal;
+                color: white;
+            }
+            #editor_right_main_container #editor_code_container {
+                position: absolute;
+                left: 0;
+                right: 0;
+                width: 100%;
+                height: 100%;
+                width: 100%;
+                height: 100%;
+            }
+            #editor_right_main_container #editor_code_container #editor_code {
                 width: 100%;
                 height: 100%;
             }
@@ -359,7 +405,6 @@
             <button id="editor_resize_hsplit" onmousedown="start_dragging_filetree_resize();"></button>
 
             <div id="editor_right">
-                <div id="editor_right_background"></div>
                 <div id="editor_right_container" class="vbox">
 
                     <div id="editor_filetabs" class="hbox">
@@ -368,7 +413,14 @@
                     <div id="editor_filepath" class="hbox">
                     </div>
 
-                    <div id="editor_code"></div>
+                    <div id="editor_right_main_container">
+                        <div id="editor_right_main_noopen"></div>
+                        <div id="editor_right_main_nontext" style="visibility: hidden;">
+                            <h1>⚠</h1>
+                            <h2>The file is not displayed in the text editor because it is either binary or uses an unsupported text encoding.</h2>
+                        </div>
+                        <!--div id="editor_code_container" style="visibility: hidden;"><div id="editor_code"></div></div-->
+                    </div>
 
                     <div id="editor_footer" class="hbox">
                         <div id="editor_footer_left" class="hbox">
@@ -384,15 +436,12 @@
             </div>
         </div>
 
-        <script type="module">
-            import { Uint64BE } from 'https://cdn.jsdelivr.net/npm/int64-buffer@1.1.0/+esm'
-        </script>
         <script>{{EMBED_EDITOR_WS_JS}}</script> <!-- Server-client communication -->
 
         <script> // Drag to resize editor filetree.
             const e_editor_left          = document.getElementById("editor_left");
             const e_editor_resize_hsplit = document.getElementById("editor_resize_hsplit");
-            var dragging_filetree_resize = false;
+            let dragging_filetree_resize = false;
             function start_dragging_filetree_resize() {
                 dragging_filetree_resize = true;
             }
@@ -421,8 +470,8 @@
 
         <script> // Subserver properties editor
             const e_subserver_properties_editor = document.getElementById("subserver_properties_editor");
-            var subserver_properties_editor_open = false;
-            var subserver_properties_editor_closing = false;
+            let subserver_properties_editor_open = false;
+            let subserver_properties_editor_closing = false;
             function open_subserver_properties_editor() {
                 if (! subserver_properties_editor_open) {
                     subserver_properties_editor_open = true;
@@ -454,19 +503,19 @@
 
             require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@latest/min/vs' }});
 
-            var editor_code;
-            require(["vs/editor/editor.main"], () => {
+            let editor_code;
+            /*require(["vs/editor/editor.main"], () => {
 
                 monaco.editor.onDidCreateEditor((editor) => {
                     editor.layout();
                     editor_code = editor;
                 });
 
-                var req = new XMLHttpRequest();
+                let req = new XMLHttpRequest();
                 req.open("GET", "https://raw.githubusercontent.com/rafmsou/nicer-high-contrast/refs/heads/master/themes/Nicer%20High%20Contrast-color-theme.json", false);
                 req.send(null);
-                var resp = req.responseText.split("\n").map((line) => line.trim()).filter((line) => ! line.startsWith("//")).join("").replace(",}", "}");
-                var theme = JSON.parse(resp);
+                let resp = req.responseText.split("\n").map((line) => line.trim()).filter((line) => ! line.startsWith("//")).join("").replace(",}", "}");
+                let theme = JSON.parse(resp);
                 theme.base = "hc-black"
                 theme.inherit = true;
                 theme.rules = [];
@@ -474,7 +523,7 @@
 
                 editor_code = monaco.editor.create(document.getElementById("editor_code"), {
                     value: "fn main() {\n    println!(\"Hello, World!\");\n}\n",
-                    language: "rust",
+                    language: "plain",
                     theme: "nhc-black",
                     autoDetectHighContrast: false,
                     automaticLayout: true,
@@ -507,7 +556,7 @@
                         e_editor_footer_cursor_selected.innerText = "";
                     }
                 });
-            });
+            });*/
 
             document.addEventListener("keydown", function (event) {
                 if (event.ctrlKey) {

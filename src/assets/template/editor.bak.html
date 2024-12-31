@@ -385,7 +385,7 @@
         <script> // Drag to resize editor filetree.
             const e_editor_left          = document.getElementById("editor_left");
             const e_editor_resize_hsplit = document.getElementById("editor_resize_hsplit");
-            var dragging_filetree_resize = false;
+            let dragging_filetree_resize = false;
             function start_dragging_filetree_resize() {
                 dragging_filetree_resize = true;
             }
@@ -414,8 +414,8 @@
 
         <script> // Subserver properties editor
             const e_subserver_properties_editor = document.getElementById("subserver_properties_editor");
-            var subserver_properties_editor_open = false;
-            var subserver_properties_editor_closing = false;
+            let subserver_properties_editor_open = false;
+            let subserver_properties_editor_closing = false;
             function open_subserver_properties_editor() {
                 if (! subserver_properties_editor_open) {
                     subserver_properties_editor_open = true;
@@ -440,7 +440,7 @@
 
         <script> // File tree fold/unfold
             const togglers = document.getElementsByClassName("editor_filetree_fold");
-            for (var i = 0; i < togglers.length; i++) {
+            for (let i = 0; i < togglers.length; i++) {
                 togglers[i].addEventListener("click", function() {
                     this.classList.toggle("editor_filetree_unfolded");
                     this.parentElement.querySelector(".editor_filetree_nest").classList.toggle("editor_filetree_nest_unfolded");
@@ -457,7 +457,7 @@
 
             require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@latest/min/vs' }});
 
-            var editor_code;
+            let editor_code;
             require(["vs/editor/editor.main"], () => {
 
                 monaco.editor.onDidCreateEditor((editor) => {
@@ -465,11 +465,11 @@
                     editor_code = editor;
                 });
 
-                var req = new XMLHttpRequest();
+                let req = new XMLHttpRequest();
                 req.open("GET", "https://raw.githubusercontent.com/rafmsou/nicer-high-contrast/refs/heads/master/themes/Nicer%20High%20Contrast-color-theme.json", false);
                 req.send(null);
-                var resp = req.responseText.split("\n").map((line) => line.trim()).filter((line) => ! line.startsWith("//")).join("").replace(",}", "}");
-                var theme = JSON.parse(resp);
+                let resp = req.responseText.split("\n").map((line) => line.trim()).filter((line) => ! line.startsWith("//")).join("").replace(",}", "}");
+                let theme = JSON.parse(resp);
                 theme.base = "hc-black"
                 theme.inherit = true;
                 theme.rules = [];

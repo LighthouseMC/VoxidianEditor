@@ -194,7 +194,9 @@ impl EditorSession {
                     }
             } },
 
-            _ => { }
+            _ => {
+                voxidian_logger::error!("{} {:?}", prefix, data);
+            }
 
         }
     }
