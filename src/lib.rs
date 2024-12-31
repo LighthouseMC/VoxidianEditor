@@ -1,7 +1,8 @@
 #![feature(
     let_chains,
     future_join,
-    async_iterator
+    async_iterator,
+    mpmc_channel
 )]
 
 
@@ -16,7 +17,7 @@ use instance::EditorInstanceManager;
 use voxidian_database::VoxidianDB;
 use std::net::SocketAddr;
 use std::io;
-use std::sync::{ mpsc, Arc };
+use std::sync::{ mpmc, Arc };
 use std::time::Duration;
 use std::pin::pin;
 use async_std::stream::StreamExt;
@@ -45,7 +46,7 @@ impl EditorServer {
 
         server.at("/editor").get(Self::handle_editor);
 
-        let (add_ws_tx, add_ws_rx) = mpsc::channel();
+        let (add_ws_tx, add_ws_rx) = mpmc::channel();
         server.at("/editor/ws").get(
             WebSocket::new(move |req, stream| Self::handle_editor_ws(req, stream, bind_addr, add_ws_tx.clone()))
                 .with_protocols(&[env!("CARGO_PKG_NAME")])
@@ -53,7 +54,7 @@ impl EditorServer {
 
         server.at("*").get(Self::handle_404);
 
-        let (handle_incoming_tx, handle_incoming_rx) = mpsc::channel();
+        let (handle_incoming_tx, handle_incoming_rx) = mpmc::channel();
         f(EditorHandle { handle_incoming_tx });
         let mut instance_manager = EditorInstanceManager::new(handle_incoming_rx, add_ws_rx);
 
@@ -95,7 +96,7 @@ impl EditorServer {
     }
 
 
-    async fn handle_editor_ws(req : Request<()>, mut ws : WebSocketConnection, bind_addr : SocketAddr, add_ws_tx : mpsc::Sender<(mpsc::Receiver<(u8, Vec<u8>)>, WebSocketSender, String)>) -> tide::Result<()> {
+    async fn handle_editor_ws(req : Request<()>, mut ws : WebSocketConnection, bind_addr : SocketAddr, add_ws_tx : mpmc::Sender<(mpmc::Receiver<(u8, Vec<u8>)>, WebSocketSender, String)>) -> tide::Result<()> {
         if let Some(host) = req.host() && let Ok(host) = host.parse::<SocketAddr>() && host == bind_addr {} else {
             return Err(tide::Error::from_str(403, "403 Access Forbidden"));
         }
@@ -104,7 +105,7 @@ impl EditorServer {
             String::from_utf8(bytes).map_err(|_| tide::Error::from_str(400, "400 Bad Request"))?
         };
 
-        let (incoming_message_tx, incoming_message_rx) = mpsc::channel();
+        let (incoming_message_tx, incoming_message_rx) = mpmc::channel();
         let _ = add_ws_tx.send((incoming_message_rx, WebSocketSender::new(ws.clone()), session_code));
 
         let _ = incoming_message_tx.send((0, Vec::new()));

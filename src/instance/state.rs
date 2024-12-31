@@ -1,6 +1,6 @@
 use voxidian_database::{ DBFilePath, DBSubserverFileEntityKind, DBSubserverFileID, DBSubserverID, VoxidianDB };
 use std::time::{ Instant, Duration };
-use std::sync::{ mpsc, Arc };
+use std::sync::{ mpmc, Arc };
 use std::collections::HashMap;
 use async_std::task::spawn;
 
@@ -9,7 +9,7 @@ pub(crate) struct EditorInstanceState {
     db        : Arc<VoxidianDB>,
     subserver : DBSubserverID,
 
-    initial_rx    : mpsc::Receiver<(
+    initial_rx    : mpmc::Receiver<(
         SubserverProperties,
         HashMap<DBSubserverFileID, (DBFilePath, DBSubserverFileEntityKind)>
     )>,
@@ -22,7 +22,7 @@ pub(crate) struct EditorInstanceState {
 impl EditorInstanceState {
 
     pub fn open(db : Arc<VoxidianDB>, subserver : DBSubserverID) -> Self {
-        let (initial_tx, initial_rx) = mpsc::channel();
+        let (initial_tx, initial_rx) = mpmc::channel();
         spawn(Self::load_files(db.clone(), subserver, initial_tx));
         Self {
             db,
@@ -37,7 +37,7 @@ impl EditorInstanceState {
         }
     }
 
-    async fn load_files(db : Arc<VoxidianDB>, subserver : DBSubserverID, initial_tx : mpsc::Sender<(
+    async fn load_files(db : Arc<VoxidianDB>, subserver : DBSubserverID, initial_tx : mpmc::Sender<(
         SubserverProperties,
         HashMap<DBSubserverFileID, (DBFilePath, DBSubserverFileEntityKind)>
     )>) {

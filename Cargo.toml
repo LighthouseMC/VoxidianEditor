@@ -35,6 +35,10 @@ version = "0.2"
 [dependencies.openssl]
 version = "0.10"
 
+[dependencies.uuid]
+version  = "1.11"
+features = [ "v4" ]
+
 
 [dev-dependencies.async-std]
 version = "*"

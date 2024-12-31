@@ -1,16 +1,18 @@
 use voxidian_database::DBSubserverID;
-use std::sync::mpsc;
+use std::sync::mpmc;
 use std::time::Duration;
 use openssl::rand::rand_priv_bytes;
+use uuid::Uuid;
 
 
 #[derive(Debug)]
 pub(crate) enum EditorHandleIncomingEvent {
 
     StartSession {
-        timeout      : Duration,
         subserver    : DBSubserverID,
-        display_name : String,
+        timeout      : Duration,
+        player_uuid  : Uuid,
+        player_name  : String,
         session_code : String
     }
 
@@ -18,21 +20,22 @@ pub(crate) enum EditorHandleIncomingEvent {
 
 
 pub struct EditorHandle {
-    pub(crate) handle_incoming_tx : mpsc::Sender<EditorHandleIncomingEvent>
+    pub(crate) handle_incoming_tx : mpmc::Sender<EditorHandleIncomingEvent>
 }
 impl EditorHandle {
 
     /// Starts an editor session for the given subserver.
     /// The connection will be displayed in editor as the given display name.
     /// If a connection is not established within the given timeout duration, the session is cancelled.
-    pub fn start_session<const PW_LEN : usize>(&self, timeout : Duration, subserver : DBSubserverID, display_name : String) -> String {
+    pub fn start_session<const PW_LEN : usize>(&self, subserver : DBSubserverID, timeout : Duration, player_uuid : Uuid, player_name : String) -> String {
         let mut bytes = [0; PW_LEN];
         rand_priv_bytes(&mut bytes).unwrap();
         let session_code = bytes.map(|byte| rand_byte_to_char(byte)).into_iter().collect::<String>();
         let _ = self.handle_incoming_tx.send(EditorHandleIncomingEvent::StartSession {
-            timeout,
             subserver,
-            display_name,
+            timeout,
+            player_uuid,
+            player_name,
             session_code : session_code.clone()
         });
         session_code
