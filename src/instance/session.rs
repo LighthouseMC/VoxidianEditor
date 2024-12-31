@@ -1,6 +1,7 @@
 use crate::ws::*;
+use crate::instance::EditorInstanceState;
 use voxidian_logger::trace;
-use voxidian_database::DBSubserverID;
+use voxidian_database::{DBSubserverFileEntityKind, DBSubserverID};
 use std::time::{ Instant, Duration };
 use std::hint::unreachable_unchecked;
 use std::sync::mpsc::{ self, TryRecvError };
@@ -39,14 +40,14 @@ impl EditorSession {
 impl EditorSession {
 
 
-    pub fn update_session(&mut self) -> bool {
+    pub fn update_session(&mut self, instance_state : &mut EditorInstanceState) -> bool {
 
         // State-specific behaviour.
         let retain = match (&self.state) {
             EditorSessionState::WaitingForHandshake { expires_at, .. } => {
                 Instant::now() < *expires_at
             },
-            EditorSessionState::LoggedIn { .. } => self.update_loggedin_session()
+            EditorSessionState::LoggedIn { .. } => self.update_loggedin_session(instance_state)
         };
 
         // Close this session if needed.
@@ -57,12 +58,12 @@ impl EditorSession {
     }
 
 
-    fn update_loggedin_session(&mut self) -> bool {
+    fn update_loggedin_session(&mut self, instance_state : &mut EditorInstanceState) -> bool {
         let EditorSessionState::LoggedIn { incoming_message_receiver, .. } = &mut self.state else { unsafe{ unreachable_unchecked() } };
 
         match (incoming_message_receiver.try_recv()) {
             Ok((prefix, data)) => {
-                self.handle_incoming_message(prefix, data);
+                self.handle_incoming_message(instance_state, prefix, data);
             },
             Err(TryRecvError::Empty) => { },
             Err(TryRecvError::Disconnected) => {
@@ -85,13 +86,26 @@ impl EditorSession {
     }
 
 
-    fn handle_incoming_message(&mut self, prefix : u8, data : Vec<u8>) {
+    fn handle_incoming_message(&mut self, instance_state : &mut EditorInstanceState, prefix : u8, data : Vec<u8>) {
         let EditorSessionState::LoggedIn { outgoing_message_sender, last_keepalive, .. } = &mut self.state else { unsafe{ unreachable_unchecked() } };
         match (prefix) {
 
             C2S_HANDSHAKE => {
-                outgoing_message_sender.send(S2C_INITIAL_STATE , Vec::new());
-                outgoing_message_sender.send(S2C_KEEPALIVE     , Vec::new());
+                let mut buf = MessageBuf::new();
+                let properties = instance_state.properties();
+                buf.write(self.subserver.to_be_bytes());
+                buf.write_str(&properties.name);
+                buf.write_str(&properties.description);
+                buf.write_str(&properties.owner_name);
+                let file_entities = instance_state.file_entities();
+                buf.write((file_entities.len() as u32).to_be_bytes());
+                for (file_entity_id, (file_path, kind)) in file_entities {
+                    buf.write(file_entity_id.to_be_bytes());
+                    buf.write([matches!(kind, DBSubserverFileEntityKind::Directory) as u8]);
+                    buf.write_str(&file_path.to_string());
+                }
+                outgoing_message_sender.send(S2C_INITIAL_STATE, buf.into_inner());
+                outgoing_message_sender.send(S2C_KEEPALIVE, Vec::new());
                 last_keepalive.1 = Ok(0);
             },
 

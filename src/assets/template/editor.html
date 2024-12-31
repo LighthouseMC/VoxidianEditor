@@ -331,17 +331,17 @@
             <div id="editor_left" class="vbox">
 
                 <div id="editor_subserver_properties">
-                    <div id="editor_subserver_name" onclick="open_subserver_properties_editor();">{{SUBSERVER_NAME}}</div>
+                    <div id="editor_subserver_name" onclick="open_subserver_properties_editor();"><span class="template_subserver_name"></span></div>
                     <div id="subserver_properties_editor">
                         <h1>Edit Subserver Properties</h1>
                         <hr />
                         <h2>Name</h2>
-                        <input id="subserver_properties_editor_name" type="text" value="{{SUBSERVER_NAME}}" autocomplete="off", autocorrect="off", autocapitalize="off", spellcheck=false />
-                        <h3>Subserver {{SUBSERVER_ID}}</h3>
-                        <h3>by {{SUBSERVER_OWNER}}</h3>
+                        <input id="subserver_properties_editor_name" type="text" value="" autocomplete="off", autocorrect="off", autocapitalize="off", spellcheck=false />
+                        <h3>Subserver <span class="template_subserver_id"></span></h3>
+                        <h3>by <span class="template_subserver_owner_name"></span></h3>
                         <hr />
                         <h2>Description</h2>
-                        <input id="subserver_properties_editor_description" type="text" value="{{SUBSERVER_DESCRIPTION}}" autocomplete="off", autocorrect="off", autocapitalize="off", spellcheck=false />
+                        <input id="subserver_properties_editor_description" type="text" value="" autocomplete="off", autocorrect="off", autocapitalize="off", spellcheck=false />
                         <br />
                         <hr />
                         <button>Save</button>
@@ -350,7 +350,7 @@
                 </div>
 
                 <div id="editor_filetree">
-                    <ul>
+                    <ul id="editor_filetree_root">
                     </ul>
                 </div>
 
@@ -443,16 +443,6 @@
                     }
                 }
             });
-        </script>
-
-        <script> // File tree fold/unfold
-            const togglers = document.getElementsByClassName("editor_filetree_fold");
-            for (var i = 0; i < togglers.length; i++) {
-                togglers[i].addEventListener("click", function() {
-                    this.classList.toggle("editor_filetree_unfolded");
-                    this.parentElement.querySelector(".editor_filetree_nest").classList.toggle("editor_filetree_nest_unfolded");
-                });
-            }
         </script>
 
         <script src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script> <!-- Code editor -->

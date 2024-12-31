@@ -1,15 +1,17 @@
 mod session;
 use session::*;
+mod state;
+use state::*;
 
 
 use crate::ws::WebSocketSender;
 use crate::handle::EditorHandleIncomingEvent;
 use voxidian_logger::{ debug, trace };
-use voxidian_database::DBSubserverID;
-use std::sync::mpsc;
+use voxidian_database::{ VoxidianDB, DBSubserverID };
+use std::sync::{ mpsc, Arc };
 use std::collections::HashMap;
 use std::time::Instant;
-use async_std::task::yield_now;
+use async_std::task::{ block_on, yield_now };
 
 
 pub(crate) struct EditorInstanceManager {
@@ -30,13 +32,13 @@ impl EditorInstanceManager {
 impl EditorInstanceManager {
 
 
-    pub(crate) async fn run(&mut self) {
+    pub(crate) async fn run(&mut self, db : Arc<VoxidianDB>) {
         loop {
 
             // Accept commands from the main server.
             while let Ok(handle_incoming) = self.handle_incoming_rx.try_recv() { match (handle_incoming) {
                 EditorHandleIncomingEvent::StartSession { timeout, subserver, display_name, session_code } => {
-                    self.start_session(subserver, display_name.clone(), session_code, EditorSession::new(subserver, timeout, display_name));
+                    self.start_session(&db, subserver, display_name.clone(), session_code, EditorSession::new(subserver, timeout, display_name));
                 },
             } }
 
@@ -45,7 +47,7 @@ impl EditorInstanceManager {
 
             // Accept new session logins.
             while let Ok((incoming_message_receiver, outgoing_message_sender, session_code)) = self.add_ws_rx.try_recv() {
-                'check_instances : for instance in self.instances.values_mut() {
+                'check_instances : for instance in self.instances.values_mut() { if (instance.state.is_ready()) {
                     if let Some(session) = instance.sessions.get_mut(&session_code) {
                         if let EditorSessionState::WaitingForHandshake { .. } = session.state {
                             trace!("{} logged in to editor session for subserver {}.", session.display_name, instance.subserver);
@@ -57,7 +59,7 @@ impl EditorInstanceManager {
                         }
                         break 'check_instances;
                     }
-                }
+                } }
             }
 
             yield_now().await;
@@ -65,16 +67,16 @@ impl EditorInstanceManager {
     }
 
 
-    fn get_or_create_instance(&mut self, subserver : DBSubserverID) -> &mut EditorInstance {
+    fn get_or_create_instance(&mut self, db : &Arc<VoxidianDB>, subserver : DBSubserverID) -> &mut EditorInstance {
         self.instances.entry(subserver).or_insert_with(|| {
             debug!("Opened editor instance for subserver {}.", subserver);
-            EditorInstance::new(subserver)
+            EditorInstance::new(db.clone(), subserver)
         })
     }
 
 
-    fn start_session(&mut self, subserver : DBSubserverID, display_name : String, session_code : String, session : EditorSession) {
-        let instance = self.get_or_create_instance(subserver);
+    fn start_session(&mut self, db : &Arc<VoxidianDB>, subserver : DBSubserverID, display_name : String, session_code : String, session : EditorSession) {
+        let instance = self.get_or_create_instance(db, subserver);
         instance.start_session(session_code, session);
         trace!("{} opened an editor session for subserver {}.", display_name, subserver);
     }
@@ -87,12 +89,14 @@ impl EditorInstanceManager {
 ///  Multiple sessions can connect to it.
 struct EditorInstance {
     subserver : DBSubserverID,
-    sessions  : HashMap<String, EditorSession>
+    sessions  : HashMap<String, EditorSession>,
+    state     : EditorInstanceState
 }
 impl EditorInstance {
-    pub fn new(subserver : DBSubserverID) -> Self { Self {
+    pub fn new(db : Arc<VoxidianDB>, subserver : DBSubserverID) -> Self { Self {
         subserver,
-        sessions  : HashMap::new()
+        sessions  : HashMap::new(),
+        state     : EditorInstanceState::open(db, subserver)
     } } 
 }
 impl EditorInstance {
@@ -116,7 +120,7 @@ impl EditorInstance {
 
     fn update_sessions(&mut self) -> bool {
         // Remove any sessions.
-        self.sessions.retain(|_, session| session.update_session());
+        self.sessions.retain(|_, session| session.update_session(&mut self.state));
 
         // Close this instance if there are no sessions.
         let retain = ! self.sessions.is_empty();
@@ -127,4 +131,9 @@ impl EditorInstance {
     }
 
 
+}
+impl Drop for EditorInstance {
+    fn drop(&mut self) {
+        block_on(self.state.save());
+    }
 }

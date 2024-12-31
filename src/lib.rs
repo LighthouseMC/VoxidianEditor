@@ -13,9 +13,10 @@ mod instance;
 use instance::EditorInstanceManager;
 
 
+use voxidian_database::VoxidianDB;
 use std::net::SocketAddr;
 use std::io;
-use std::sync::mpsc;
+use std::sync::{ mpsc, Arc };
 use std::time::Duration;
 use std::pin::pin;
 use async_std::stream::StreamExt;
@@ -32,7 +33,7 @@ pub struct EditorServer(());
 impl EditorServer {
 
 
-    pub async fn run<S : Into<SocketAddr>, F : Fn(EditorHandle) -> ()>(bind_addr : S, f : F) -> Result<(), io::Error> {
+    pub async fn run<S : Into<SocketAddr>, F : Fn(EditorHandle) -> ()>(bind_addr : S, db : Arc<VoxidianDB>, f : F) -> Result<(), io::Error> {
         let bind_addr = bind_addr.into();
         let mut server = tide::new();
 
@@ -57,7 +58,7 @@ impl EditorServer {
         let mut instance_manager = EditorInstanceManager::new(handle_incoming_rx, add_ws_rx);
 
         let mut a = pin!(server.listen(bind_addr));
-        let mut b = pin!(instance_manager.run());
+        let mut b = pin!(instance_manager.run(db));
         loop {
             let ap = poll!(&mut a);
             if (ap.is_ready()) { return a.await; }

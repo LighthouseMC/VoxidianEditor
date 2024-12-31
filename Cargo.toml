@@ -2,7 +2,7 @@
 name        = "voxidian-editor"
 version     = "0.1.0"
 authors     = ["LighthouseMC <https://github.com/LighthouseMC>"]
-description = "Simple web-based code editor (server)."
+description = "A simple web-based code editor for the Lighthouse Minecraft server."
 license     = "LGPL-3.0"
 
 homepage   = "https://github.com/LighthouseMC"
