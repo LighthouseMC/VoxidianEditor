@@ -1,28 +1,31 @@
 #![feature(
-    let_chains
+    let_chains,
+    future_join,
+    async_iterator
 )]
 
 
 mod ws;
+use ws::WebSocketSender;
 mod handle;
-use handle::EditorHandleInner;
 pub use handle::EditorHandle;
 mod instance;
-use instance::EditorInstance;
-mod session;
-use session::EditorSession;
+use instance::EditorInstanceManager;
 
 
 use std::net::SocketAddr;
 use std::io;
+use std::sync::mpsc;
 use std::time::Duration;
+use std::pin::pin;
 use async_std::stream::StreamExt;
 use async_std::future;
+use async_std::task::yield_now;
+use futures::poll;
 use tide::{ self, Request, Response };
 use tide::http::mime::{ self, Mime };
 use tide_websockets::{ WebSocket, WebSocketConnection, Message };
 use const_format::str_replace;
-use uuid::Uuid;
 
 
 pub struct EditorServer(());
@@ -33,8 +36,6 @@ impl EditorServer {
         let bind_addr = bind_addr.into();
         let mut server = tide::new();
 
-        let handle = EditorHandleInner::new();
-
         server.at("/robots.txt").get(Self::handle_robotstxt);
 
         server.at("/assets/image/logo_transparent.png").get(|req| Self::handle_asset(req, mime::PNG, include_bytes!("assets/image/logo_transparent.png")));
@@ -43,16 +44,27 @@ impl EditorServer {
 
         server.at("/editor").get(Self::handle_editor);
 
+        let (add_ws_tx, add_ws_rx) = mpsc::channel();
         server.at("/editor/ws").get(
-            WebSocket::new(move |req, stream| Self::handle_editor_ws(req, stream, bind_addr))
+            WebSocket::new(move |req, stream| Self::handle_editor_ws(req, stream, bind_addr, add_ws_tx.clone()))
                 .with_protocols(&[env!("CARGO_PKG_NAME")])
         );
 
         server.at("*").get(Self::handle_404);
 
-        f(EditorHandle(handle));
+        let (handle_incoming_tx, handle_incoming_rx) = mpsc::channel();
+        f(EditorHandle { handle_incoming_tx });
+        let mut instance_manager = EditorInstanceManager::new(handle_incoming_rx, add_ws_rx);
 
-        server.listen(bind_addr).await
+        let mut a = pin!(server.listen(bind_addr));
+        let mut b = pin!(instance_manager.run());
+        loop {
+            let ap = poll!(&mut a);
+            if (ap.is_ready()) { return a.await; }
+            let bp = poll!(&mut b);
+            if (bp.is_ready()) { unreachable!(); }
+            yield_now().await;
+        }
     }
 
 
@@ -82,17 +94,28 @@ impl EditorServer {
     }
 
 
-    async fn handle_editor_ws(req : Request<()>, mut stream : WebSocketConnection, bind_addr : SocketAddr) -> tide::Result<()> {
+    async fn handle_editor_ws(req : Request<()>, mut ws : WebSocketConnection, bind_addr : SocketAddr, add_ws_tx : mpsc::Sender<(mpsc::Receiver<(u8, Vec<u8>)>, WebSocketSender, String)>) -> tide::Result<()> {
         if let Some(host) = req.host() && let Ok(host) = host.parse::<SocketAddr>() && host == bind_addr {} else {
             return Err(tide::Error::from_str(403, "403 Access Forbidden"));
         }
-
         let session_code = {
-            let bytes = Self::read_ws_message::<{ws::C2S_HANDSHAKE}>(&mut stream, Duration::from_secs(1)).await?;
-            let bytes = bytes.try_into().map_err(|_| tide::Error::from_str(400, "400 Bad Request"))?;
-            Uuid::from_bytes(bytes)
+            let bytes = Self::read_ws_message::<{ws::C2S_HANDSHAKE}>(&mut ws, Duration::from_secs(1)).await?;
+            String::from_utf8(bytes).map_err(|_| tide::Error::from_str(400, "400 Bad Request"))?
         };
 
+        let (incoming_message_tx, incoming_message_rx) = mpsc::channel();
+        let _ = add_ws_tx.send((incoming_message_rx, WebSocketSender::new(ws.clone()), session_code));
+
+        let _ = incoming_message_tx.send((0, Vec::new()));
+
+        while {
+            if let Some(Ok(Message::Binary(mut incoming_message))) = ws.next().await {
+                if (incoming_message.len() > 0) {
+                    let prefix = incoming_message.remove(0);
+                    matches!(incoming_message_tx.send((prefix, incoming_message)), Ok(_))
+                } else { false }
+            } else { false }
+        } { yield_now().await }
         Ok(())
     }
 
