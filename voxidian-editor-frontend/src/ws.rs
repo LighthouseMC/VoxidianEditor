@@ -161,9 +161,14 @@ fn on_ws_message(e : MessageEvent) {
             // File tree
             crate::filetree::clear();
             for entry in initial_state.file_entities {
-                crate::filetree::add(entry);
+                crate::state::add_file(&entry);
             }
             crate::filetree::sort();
+        },
+
+
+        S2CPackets::OvewriteFile(overwrite_file) => {
+            todo!()
         }
 
 

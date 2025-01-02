@@ -18,7 +18,8 @@ impl PacketEncode for KeepaliveC2SPacket {
 
 impl PacketDecode for KeepaliveC2SPacket {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
-        let index = buf.read_decode::<u64>()?;
-        Ok(Self { index })
+        Ok(Self {
+            index : buf.read_decode()?
+        })
     }
 }

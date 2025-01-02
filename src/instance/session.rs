@@ -240,7 +240,15 @@ impl EditorSession {
                     self.send(DisconnectS2CPacket { reason : "An error occured: Out of order ping".to_string() }).await?;
                     self.stop()?;
                 },
-            } }
+            } },
+
+            C2SPackets::OpenFile(open_file) => {
+                todo!()
+            },
+
+            C2SPackets::CloseFile(close_file) => {
+                todo!()
+            }
 
         }
         Ok(())

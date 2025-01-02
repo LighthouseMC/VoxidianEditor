@@ -18,7 +18,8 @@ impl PacketEncode for HandshakeC2SPacket {
 
 impl PacketDecode for HandshakeC2SPacket {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
-        let session_code = buf.read_decode::<String>()?;
-        Ok(Self { session_code })
+        Ok(Self {
+            session_code : buf.read_decode()?
+        })
     }
 }

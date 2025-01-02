@@ -208,7 +208,7 @@
             #editor_filetree li div:hover {
                 background-color: rgb(255,255,255,0.125);
             }
-            #editor_filetree li div.editor_filetree_selected {
+            #editor_filetree li div#editor_filetree_selected {
                 background-color: rgb(255,255,255,0.25);
             }
             #editor_filetree .editor_filetree_fold:before {
@@ -239,7 +239,7 @@
             #editor_filetabs {
                 width: 100%;
             }
-            #editor_filetabs * {
+            #editor_filetabs > * {
                 width: max-content;
                 height: max-content;
                 user-select: none;
@@ -250,18 +250,20 @@
                 font-weight: 400;
                 font-style: normal;
                 cursor: grab; cursor: -webkit-grabbing; cursor: grabbing;
+                justify-content: center;
             }
-            #editor_filetabs .editor_filetab_selected {
+            #editor_filetabs #editor_filetab_selected {
                 color: #a6f500;
                 border-bottom: 1px solid #bfbfbf;
             }
-            #editor_filetabs *:after {
+            #editor_filetabs > * .editor_filetab_close {
                 margin-left: 8px;
-                content: "×";
+                width: min-content;
+                height: min-content;
                 opacity: 0;
                 transition: opacity 0.125s;
             }
-            #editor_filetabs *.editor_filetab_selected:after, #editor_filetabs *:hover:after {
+            #editor_filetabs > #editor_filetab_selected .editor_filetab_close, #editor_filetabs > *:hover .editor_filetab_close {
                 opacity: 1;
             }
         </style>

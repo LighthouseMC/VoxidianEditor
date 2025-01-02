@@ -37,14 +37,7 @@ pub fn clear() {
 }
 
 
-#[wasm_bindgen::prelude::wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen::prelude::wasm_bindgen(js_namespace = console)]
-    fn warn(message : &str);
-}
-
-
-pub fn add(entry : FileTreeEntry) {
+pub fn add(entry : &FileTreeEntry) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
@@ -101,6 +94,11 @@ pub fn add(entry : FileTreeEntry) {
         }
         entry_root.append_child(&div).unwrap();
 
+        let id = entry.id;
+        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::open_file(id));
+        div.add_event_listener_with_callback("click", click_callback.as_ref().unchecked_ref()).unwrap();
+        click_callback.forget();
+
     }
 
     // Add to parent
@@ -111,44 +109,62 @@ pub fn add(entry : FileTreeEntry) {
         parent.query_selector(".editor_filetree_nest").unwrap().unwrap().append_child(&entry_root).unwrap();
     }
 
-    FILETREE.nodes().insert(entry.path, entry_root);
+    FILETREE.nodes().insert(entry.path.clone(), entry_root);
 }
 
 
-pub fn sort() {
-    fn sort_one(entry_root : &Element) {
-        let mut children = {
-            let children = entry_root.children();
-            let mut out = Vec::with_capacity(children.length() as usize);
-            for i in 0..children.length() {
-                out.push(children.get_with_index(i).unwrap());
-            }
-            out
-        };
-        children.sort_by(|a, b| {
-            let a_is_dir = a.has_attribute("editor_filetree_is_dir");
-            let b_is_dir = b.has_attribute("editor_filetree_is_dir");
-            match ((a_is_dir, b_is_dir)) {
-                (true, false) => Ordering::Less,
-                (false, true) => Ordering::Greater,
-                (true, true) | (false, false) => {
-                    let a_filename_lowercase = a.get_attribute("editor_filetree_filename_lowercase").unwrap();
-                    let b_filename_lowercase = b.get_attribute("editor_filetree_filename_lowercase").unwrap();
-                    a_filename_lowercase.cmp(&b_filename_lowercase)
-                }
-            }
-        });
-        for child in children {
-            entry_root.append_child(&child).unwrap();
+fn sort_one(entry_root : &Element) {
+    let mut children = {
+        let children = entry_root.children();
+        let mut out = Vec::with_capacity(children.length() as usize);
+        for i in 0..children.length() {
+            out.push(children.get_with_index(i).unwrap());
         }
+        out
+    };
+    children.sort_by(|a, b| {
+        let a_is_dir = a.has_attribute("editor_filetree_is_dir");
+        let b_is_dir = b.has_attribute("editor_filetree_is_dir");
+        match ((a_is_dir, b_is_dir)) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            (true, true) | (false, false) => {
+                let a_filename_lowercase = a.get_attribute("editor_filetree_filename_lowercase").unwrap();
+                let b_filename_lowercase = b.get_attribute("editor_filetree_filename_lowercase").unwrap();
+                a_filename_lowercase.cmp(&b_filename_lowercase)
+            }
+        }
+    });
+    for child in children {
+        entry_root.append_child(&child).unwrap();
     }
-
+}
+pub fn sort() {
     sort_one(FILETREE.root());
     for (_, entry_root) in &*FILETREE.nodes() {
         if let Some(entry_root) = entry_root.query_selector(".editor_filetree_nest").unwrap() {
             sort_one(&entry_root);
         }
     }
+}
+
+
+pub fn open(path : &str) {
+    let window   = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+    if let Some(element) = document.get_element_by_id("editor_filetree_selected") {
+        element.remove_attribute("id").unwrap();
+    }
+    let nodes = FILETREE.nodes();
+    let Some(entry_root) = nodes.get(path) else { return };
+    entry_root.first_child().unwrap().dyn_into::<Element>().unwrap().set_id("editor_filetree_selected");
+}
+
+
+pub fn close(path : &str) {
+    let nodes = FILETREE.nodes();
+    let Some(entry_root) = nodes.get(path) else { return };
+    entry_root.first_child().unwrap().dyn_into::<Element>().unwrap().remove_attribute("id").unwrap();
 }
 
 
@@ -179,7 +195,7 @@ fn filename_to_icon(filename : &str) -> Option<(&'static str, bool)> {
             // LabVIEW
             "lvproj" => ("devicon-labview-plain", true),
             // Lua
-            "lua" | "fcgi" | "nse" | "pd_lua" | "rbxs" | "wlua"
+            "lua" | "nse" | "pd_lua" | "rbxs" | "wlua"
                 => ("devicon-lua-plain", true),
             // TypeScript
             "ts" | "tsx"
@@ -207,7 +223,7 @@ fn filename_to_icon(filename : &str) -> Option<(&'static str, bool)> {
             "pl" | "al" | "perl" | "ph" | "plx" | "pm" | "pod" | "psgi" | "t" | "6pl" | "6pm" | "nqp" | "p6" | "p6l" | "p6m" | "pl6" | "pm6"
                 => ("devicon-perl-plain", true),
             // PHP
-            "php" | "aw" | "ctp" | "inc" | "php3" | "php4" | "php5" | "phps" | "phpt"
+            "php" | "aw" | "ctp" | "php3" | "php4" | "php5" | "phps" | "phpt"
                 => ("devicon-php-plain", true),
             // Python
             "py" | "bzl" | "cgi" | "fcgi" | "gyp" | "lmi" | "pyde" | "pyp" | "pyt" | "pyw" | "rpy" | "tac" | "wsgi" | "xpy"
@@ -219,7 +235,7 @@ fn filename_to_icon(filename : &str) -> Option<(&'static str, bool)> {
             "r" | "rd" | "rsx"
                 => ("devicon-r-plain", true),
             // Ruby
-            "rb" | "builder" | "fcgi" | "gemspec" | "god" | "irbrc" | "jbuilder" | "mspec" | "pluginspec" | "podspec" | "rabl" | "rake" | "rbuild" | "rbw" | "rbx" | "ru" | "ruby" | "thor" | "watchr"
+            "rb" | "builder" | "gemspec" | "god" | "irbrc" | "jbuilder" | "mspec" | "pluginspec" | "podspec" | "rabl" | "rake" | "rbuild" | "rbw" | "rbx" | "ru" | "ruby" | "thor" | "watchr"
                 => ("devicon-ruby-plain", true),
             // Swift
             "swift" => ("devicon-swift-plain", true),

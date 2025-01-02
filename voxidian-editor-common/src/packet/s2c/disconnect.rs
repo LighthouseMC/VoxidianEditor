@@ -18,7 +18,8 @@ impl PacketEncode for DisconnectS2CPacket {
 
 impl PacketDecode for DisconnectS2CPacket {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
-        let reason = buf.read_decode::<String>()?;
-        Ok(Self { reason })
+        Ok(Self {
+            reason : buf.read_decode()?
+        })
     }
 }
