@@ -1,11 +1,11 @@
 use voxidian_database::DBSubserverID;
 use std::sync::mpmc;
 use std::time::Duration;
+use async_std::task::{ block_on, yield_now };
 use openssl::rand::rand_priv_bytes;
 use uuid::Uuid;
 
 
-#[derive(Debug)]
 pub(crate) enum EditorHandleIncomingEvent {
 
     StartSession {
@@ -14,13 +14,23 @@ pub(crate) enum EditorHandleIncomingEvent {
         player_uuid  : Uuid,
         player_name  : String,
         session_code : String
-    }
+    },
+
+    Stop
+
+}
+
+
+pub(crate) enum EditorHandleOutgoingEvent {
+
+    Stop
 
 }
 
 
 pub struct EditorHandle {
-    pub(crate) handle_incoming_tx : mpmc::Sender<EditorHandleIncomingEvent>
+    pub(crate) handle_incoming_tx : mpmc::Sender<EditorHandleIncomingEvent>,
+    pub(crate) handle_outgoing_rx : mpmc::Receiver<EditorHandleOutgoingEvent>
 }
 impl EditorHandle {
 
@@ -41,6 +51,15 @@ impl EditorHandle {
         session_code
     }
 
+}
+impl Drop for EditorHandle {
+    fn drop(&mut self) {
+        let _ = self.handle_incoming_tx.send(EditorHandleIncomingEvent::Stop);
+        loop {
+            if let Ok(EditorHandleOutgoingEvent::Stop) = self.handle_outgoing_rx.try_recv() { break; }
+            block_on(yield_now());
+        }
+    }
 }
 
 

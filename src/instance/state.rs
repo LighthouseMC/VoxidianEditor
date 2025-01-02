@@ -69,7 +69,7 @@ impl EditorInstanceState {
         } else { unsafe{ Some(self.properties.as_mut().unwrap_unchecked()) } }
     }
 
-    pub fn properties(&mut self) -> &mut SubserverProperties {
+    pub fn properties(&mut self) -> &SubserverProperties {
         self.properties_or_none().unwrap()
     }
 
@@ -83,7 +83,7 @@ impl EditorInstanceState {
         } else { unsafe{ Some(self.file_entities.as_mut().unwrap_unchecked()) } }
     }
 
-    pub fn file_entities(&mut self) -> &mut HashMap<DBSubserverFileID, (DBFilePath, DBSubserverFileEntityKind)> {
+    pub fn file_entities(&mut self) -> &HashMap<DBSubserverFileID, (DBFilePath, DBSubserverFileEntityKind)> {
         self.file_entities_or_none().unwrap()
     }
 

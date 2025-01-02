@@ -1,62 +1,33 @@
 use std::sync::Arc;
-use async_std::task::spawn;
+use std::sync::atomic::{ AtomicBool, Ordering };
+use std::ops::{ Deref, DerefMut };
 use tide_websockets::WebSocketConnection;
 
 
-pub const C2S_HANDSHAKE : u8 = 0;
-pub const C2S_KEEPALIVE : u8 = 1;
-
-pub const S2C_INITIAL_STATE : u8 = 0;
-pub const S2C_KEEPALIVE     : u8 = 1;
-
-
-pub(crate) struct WebSocketSender {
-    ws : Arc<WebSocketConnection>
+#[derive(Clone)]
+pub(crate) struct WebSocketContainer {
+    ws     : WebSocketConnection,
+    closed : Arc<AtomicBool>
 }
-impl WebSocketSender {
+impl WebSocketContainer {
+
     pub fn new(ws : WebSocketConnection) -> Self { Self {
-        ws : Arc::new(ws)
-    } }
-}
-impl WebSocketSender {
-
-    pub fn send(&self, prefix : u8, mut message : Vec<u8>) {
-        message.insert(0, prefix);
-        let ws = self.ws.clone();
-        spawn(async move {
-            let _ = ws.send_bytes(message).await;
-        });
-    }
-
-}
-
-
-pub(crate) struct MessageBuf {
-    inner : Vec<u8>,
-    head  : usize
-}
-impl MessageBuf {
-
-    pub fn new() -> Self { Self {
-        inner : Vec::new(),
-        head  : 0
+        ws,
+        closed : Arc::new(AtomicBool::new(false))
     } }
 
-    pub fn write<I : IntoIterator<Item = u8>>(&mut self, iter : I) {
-        self.inner.extend(iter);
-        self.head = self.inner.len();
+    pub fn is_closed(&self) -> bool { self.closed.load(Ordering::Relaxed) }
+
+}
+impl Deref for WebSocketContainer {
+    type Target = WebSocketConnection;
+    fn deref(&self) -> &Self::Target { &self.ws }
+}
+impl DerefMut for WebSocketContainer {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.ws }
+}
+impl Drop for WebSocketContainer {
+    fn drop(&mut self) {
+        self.closed.store(true, Ordering::Relaxed);
     }
-
-    pub fn write_str(&mut self, s : &str) {
-        self.write((s.len() as u32).to_be_bytes());
-        self.write(s.bytes());
-    }
-
-    pub fn extend(&mut self, other : MessageBuf) {
-        self.inner.extend(other.inner.into_iter().skip(other.head));
-        self.head = self.inner.len();
-    }
-
-    pub fn into_inner(self) -> Vec<u8> { self.inner }
-
 }

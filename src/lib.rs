@@ -7,13 +7,16 @@
 
 
 mod ws;
-use ws::WebSocketSender;
+use ws::WebSocketContainer;
 mod handle;
 pub use handle::EditorHandle;
 mod instance;
 use instance::EditorInstanceManager;
 
 
+use voxidian_editor_common::packet::{ PacketBuf, PrefixedPacketDecode };
+use voxidian_editor_common::packet::s2c::DisconnectS2CPacket;
+use voxidian_editor_common::packet::c2s::HandshakeC2SPacket;
 use voxidian_database::VoxidianDB;
 use std::net::SocketAddr;
 use std::io;
@@ -21,7 +24,7 @@ use std::sync::{ mpmc, Arc };
 use std::time::Duration;
 use std::pin::pin;
 use async_std::stream::StreamExt;
-use async_std::future;
+use async_std::future::timeout;
 use async_std::task::yield_now;
 use futures::poll;
 use tide::{ self, Request, Response };
@@ -45,18 +48,24 @@ impl EditorServer {
         server.at("/").get(Self::handle_root);
 
         server.at("/editor").get(Self::handle_editor);
+        server.at("/editor/voxidian_editor_frontend.js").get(|req| Self::handle_asset(req, mime::JAVASCRIPT, include_bytes!("../voxidian-editor-frontend/pkg/voxidian_editor_frontend.js")));
+        server.at("/editor/voxidian_editor_frontend_bg.wasm").get(|req| Self::handle_asset(req, mime::WASM, include_bytes!("../voxidian-editor-frontend/pkg/voxidian_editor_frontend_bg.wasm")));
 
         let (add_ws_tx, add_ws_rx) = mpmc::channel();
         server.at("/editor/ws").get(
             WebSocket::new(move |req, stream| Self::handle_editor_ws(req, stream, bind_addr, add_ws_tx.clone()))
-                .with_protocols(&[env!("CARGO_PKG_NAME")])
+                .with_protocols(&["voxidian-editor"])
         );
 
         server.at("*").get(Self::handle_404);
 
         let (handle_incoming_tx, handle_incoming_rx) = mpmc::channel();
-        f(EditorHandle { handle_incoming_tx });
-        let mut instance_manager = EditorInstanceManager::new(handle_incoming_rx, add_ws_rx);
+        let (handle_outgoing_tx, handle_outgoing_rx) = mpmc::channel();
+        f(EditorHandle {
+            handle_incoming_tx,
+            handle_outgoing_rx
+        });
+        let mut instance_manager = EditorInstanceManager::new(handle_incoming_rx, handle_outgoing_tx, add_ws_rx);
 
         let mut a = pin!(server.listen(bind_addr));
         let mut b = pin!(instance_manager.run(db));
@@ -85,51 +94,46 @@ impl EditorServer {
 
 
     async fn handle_editor(_ : Request<()>) -> tide::Result {
-        const EDITORWS0 : &'static str = include_str!("assets/template/editor.ws.js");
-        const EDITORWS  : &'static str = str_replace!(EDITORWS0, "{{VOXIDIAN_EDITOR_NAME}}", env!("CARGO_PKG_NAME"));
-        const EDITOR0   : &'static str = include_str!("assets/template/editor.html");
-        const EDITOR1   : &'static str = str_replace!(EDITOR0, "{{VOXIDIAN_EDITOR_VERSION}}", env!("CARGO_PKG_VERSION"));
-        const EDITOR2   : &'static str = str_replace!(EDITOR1, "{{VOXIDIAN_EDITOR_COMMIT}}", env!("VOXIDIAN_EDITOR_COMMIT"));
-        const EDITOR3   : &'static str = str_replace!(EDITOR2, "{{VOXIDIAN_EDITOR_COMMIT_HASH}}", env!("VOXIDIAN_EDITOR_COMMIT_HASH"));
-        const EDITOR    : &'static str = str_replace!(EDITOR3, "{{EMBED_EDITOR_WS_JS}}", EDITORWS);
+        const EDITOR0 : &'static str = include_str!("assets/template/editor.html");
+        const EDITOR1 : &'static str = str_replace!(EDITOR0, "{{VOXIDIAN_EDITOR_VERSION}}", env!("CARGO_PKG_VERSION"));
+        const EDITOR2 : &'static str = str_replace!(EDITOR1, "{{VOXIDIAN_EDITOR_COMMIT}}", env!("VOXIDIAN_EDITOR_COMMIT"));
+        const EDITOR  : &'static str = str_replace!(EDITOR2, "{{VOXIDIAN_EDITOR_COMMIT_HASH}}", env!("VOXIDIAN_EDITOR_COMMIT_HASH"));
         Ok(Response::builder(200).content_type(mime::HTML).body(EDITOR).build())
     }
 
 
-    async fn handle_editor_ws(req : Request<()>, mut ws : WebSocketConnection, bind_addr : SocketAddr, add_ws_tx : mpmc::Sender<(mpmc::Receiver<(u8, Vec<u8>)>, WebSocketSender, String)>) -> tide::Result<()> {
+    async fn handle_editor_ws(req : Request<()>, mut ws : WebSocketConnection, bind_addr : SocketAddr, add_ws_tx : mpmc::Sender<(WebSocketContainer, String)>) -> tide::Result<()> {
         if let Some(host) = req.host() && let Ok(host) = host.parse::<SocketAddr>() && host == bind_addr {} else {
             return Err(tide::Error::from_str(403, "403 Access Forbidden"));
         }
-        let session_code = {
-            let bytes = Self::read_ws_message::<{ws::C2S_HANDSHAKE}>(&mut ws, Duration::from_secs(1)).await?;
-            String::from_utf8(bytes).map_err(|_| tide::Error::from_str(400, "400 Bad Request"))?
+        let session_code = match (match (timeout(Duration::from_secs(1), ws.next()).await) {
+            Err(_) => Err(("Login took too long".to_string(), 408, "408 Request Timeout")),
+            Ok(None) => Err(("No data".to_string(), 400, "400 Bad Request")),
+            Ok(Some(Err(err))) => Err((format!("An error occured: {}", err), 400, "400 Bad Request")),
+            Ok(Some(Ok(Message::Binary(data)))) => {
+                let mut buf = PacketBuf::from(data);
+                match (HandshakeC2SPacket::decode_prefixed(&mut buf)) {
+                    Err(err) => Err((format!("An error occured: {:?}", err), 400, "400 Bad Request")),
+                    Ok(handshake) => Ok(handshake.session_code)
+                }
+            },
+            Ok(Some(Ok(_))) => Err(("Bad data format".to_string(), 400, "400 Bad Request"))
+        }) {
+            Err((reason, code, error)) => {
+                let _ = ws.send_bytes(PacketBuf::of_encode_prefixed(DisconnectS2CPacket { reason }).into_inner()).await;
+                return Err(tide::Error::from_str(code, error));
+            },
+            Ok(session_code) => session_code
         };
 
-        let (incoming_message_tx, incoming_message_rx) = mpmc::channel();
-        let _ = add_ws_tx.send((incoming_message_rx, WebSocketSender::new(ws.clone()), session_code));
+        let ws = WebSocketContainer::new(ws);
 
-        let _ = incoming_message_tx.send((0, Vec::new()));
+        let _ = add_ws_tx.send((ws.clone(), session_code));
 
-        while {
-            if let Some(Ok(Message::Binary(mut incoming_message))) = ws.next().await {
-                if (incoming_message.len() > 0) {
-                    let prefix = incoming_message.remove(0);
-                    matches!(incoming_message_tx.send((prefix, incoming_message)), Ok(_))
-                } else { false }
-            } else { false }
-        } { yield_now().await }
-        Ok(())
-    }
-
-
-    async fn read_ws_message<const PREFIX : u8>(stream : &mut WebSocketConnection, timeout : Duration) -> tide::Result<Vec<u8>> {
-        let Ok(message) = future::timeout(timeout, stream.next()).await else {
-            return Err(tide::Error::from_str(408, "408 Request Timeout"))
-        };
-        if let Some(Ok(Message::Binary(mut prefixed_data))) = message && prefixed_data.len() > 0 && prefixed_data.remove(0) == PREFIX {
-            return Ok(prefixed_data);
+        while (! ws.is_closed()) {
+            yield_now().await;
         }
-        return Err(tide::Error::from_str(400, "400 Bad Request"))
+        Ok(())
     }
 
 

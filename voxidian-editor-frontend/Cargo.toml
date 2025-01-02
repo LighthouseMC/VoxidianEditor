@@ -1,0 +1,54 @@
+[package]
+name        = "voxidian-editor-frontend"
+version     = "0.1.0"
+authors     = ["LighthouseMC <https://github.com/LighthouseMC>"]
+description = "A simple web-based code editor for the Lighthouse Minecraft server (frontend)."
+license     = "LGPL-3.0"
+
+homepage   = "https://github.com/LighthouseMC"
+repository = "https://github.com/LighthouseMC/VoxidianEditor"
+
+edition = "2024"
+
+workspace = ".."
+
+[lib]
+crate-type = [ "cdylib" ]
+
+[lints.rust]
+unused_parens = "allow"
+
+
+[dependencies.voxidian-editor-common]
+path = "../voxidian-editor-common"
+
+[dependencies.wasm-bindgen]
+version = "0.2"
+
+[dependencies.web-sys]
+version  = "0.3"
+features = [
+
+    "Window",
+    "Location",
+
+    # dom
+    "Document",
+    "DomTokenList",
+    "HtmlCollection",
+    "Element",
+    "HtmlInputElement",
+
+    # ws
+    "WebSocket",
+    "BinaryType",
+    "MessageEvent",
+    "ErrorEvent"
+
+]
+
+[dependencies.js-sys]
+version = "0.3"
+
+[dependencies.lazy_static]
+version = "1.5"

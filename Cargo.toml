@@ -2,7 +2,7 @@
 name        = "voxidian-editor"
 version     = "0.1.0"
 authors     = ["LighthouseMC <https://github.com/LighthouseMC>"]
-description = "A simple web-based code editor for the Lighthouse Minecraft server."
+description = "A simple web-based code editor for the Lighthouse Minecraft server (server)."
 license     = "LGPL-3.0"
 
 homepage   = "https://github.com/LighthouseMC"
@@ -10,10 +10,18 @@ repository = "https://github.com/LighthouseMC/VoxidianEditor"
 
 edition = "2024"
 
+[workspace]
+members = [
+    "voxidian-editor-common",
+    "voxidian-editor-frontend"
+]
+
 [lints.rust]
 unused_parens = "allow"
 
 
+[dependencies.voxidian-editor-common]
+path = "./voxidian-editor-common"
 [dependencies.voxidian-logger]
 path = "../voxidian-logger"
 [dependencies.voxidian-database]
@@ -40,12 +48,5 @@ version  = "1.11"
 features = [ "v4" ]
 
 
-[dev-dependencies.async-std]
-version = "*"
-features = [ "attributes" ]
-
-[dev-dependencies.chrono]
-version = "0.4"
-
-[dev-dependencies.openssl]
-version = "0.10"
+[build-dependencies.walkdir]
+version = "2.5"
