@@ -108,7 +108,7 @@ fn on_ws_open() {
     let timeout_callback = Closure::<dyn FnMut() -> ()>::new(move || {
         crate::code::diffsync::send_patches_to_server();
     });
-    set_interval(timeout_callback.as_ref().unchecked_ref(), 500);
+    set_interval(timeout_callback.as_ref().unchecked_ref(), 250);
     timeout_callback.forget();
 }
 

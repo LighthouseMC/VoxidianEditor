@@ -5,6 +5,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::Element;
 use js_sys::Array;
 use serde::Serialize as Ser;
+use serde::Deserialize as Deser;
 
 
 pub(super) static EDITORS : EditorsContainer = EditorsContainer::new();
@@ -55,40 +56,15 @@ mod js { use super::*;
 
         /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#getSelections.getSelections-1
         #[wasm_bindgen(method, js_name = "getSelections")]
-        pub fn get_selections(this : &Editor) -> Vec<EditorSelection>;
+        pub fn get_selections(this : &Editor) -> Vec<JsValue>;
 
-        /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html
+        /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#setSelections.setSelections-1
         #[wasm_bindgen(method, js_name = "setSelections")]
-        pub fn set_selections(this : &Editor, selections : Vec<EditorSelection>);
+        pub fn set_selections(this : &Editor, selections : Vec<JsValue>);
 
         /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#getModel.getModel-1
         #[wasm_bindgen(method, js_name = "getModel")]
         pub fn get_model(this : &Editor) -> EditorModel;
-    }
-
-    #[wasm_bindgen]
-    extern "C" {
-        pub type EditorSelection;
-
-        #[wasm_bindgen(constructor)]
-        pub fn new_selection(start_line : usize, start_column : usize, end_line : usize, end_column : usize) -> EditorSelection;
-
-        /// https://microsoft.github.io/monaco-editor/typedoc/classes/Selection.html#startLineNumber
-        #[wasm_bindgen(getter, js_name = "startLineNumber")]
-        pub fn get_start_line(this : &EditorSelection) -> usize;
-
-        /// https://microsoft.github.io/monaco-editor/typedoc/classes/Selection.html#startColumn
-        #[wasm_bindgen(getter, js_name = "startColumn")]
-        pub fn get_start_column(this : &EditorSelection) -> usize;
-
-        /// https://microsoft.github.io/monaco-editor/docs.html#classes/Selection.html#endLineNumber
-        #[wasm_bindgen(getter, js_name = "endLineNumber")]
-        pub fn get_end_line(this : &EditorSelection) -> usize;
-
-        /// https://microsoft.github.io/monaco-editor/typedoc/classes/Selection.html#endColumn
-        #[wasm_bindgen(getter, js_name = "endColumn")]
-        pub fn get_end_column(this : &EditorSelection) -> usize;
-
     }
 
     #[wasm_bindgen]
@@ -105,32 +81,15 @@ mod js { use super::*;
 
         /// https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor.ITextModel.html#getOffsetAt.getOffsetAt-1
         #[wasm_bindgen(method, js_name = "getOffsetAt")]
-        pub fn get_offset_at(this : &EditorModel, position : EditorPosition) -> usize;
+        pub fn get_offset_at(this : &EditorModel, position : JsValue) -> usize;
 
         /// https://microsoft.github.io/monaco-editor/typedoc/interfaces/editor.ITextModel.html#getPositionAt.getPositionAt-1
         #[wasm_bindgen(method, js_name = "getPositionAt")]
-        pub fn get_position_at(this : &EditorModel, offset : usize) -> EditorPosition;
-
-    }
-
-    #[wasm_bindgen]
-    extern "C" {
-        pub type EditorPosition;
-
-        #[wasm_bindgen(constructor)]
-        pub fn new_position(line : usize, column : usize) -> EditorPosition;
-
-        #[wasm_bindgen(getter, js_name = "lineNumber")]
-        pub fn line(this : &EditorPosition) -> usize;
-
-        #[wasm_bindgen(getter, js_name = "column")]
-        pub fn column(this : &EditorPosition) -> usize;
+        pub fn get_position_at(this : &EditorModel, offset : usize) -> JsValue;
 
     }
 
 }
-pub use js::EditorSelection;
-pub use js::EditorPosition;
 
 
 #[derive(Ser)]
@@ -172,6 +131,35 @@ struct EditorConfigMinimap {
     #[serde(rename = "showSlider")]
     show_slider : String,
     size        : String
+}
+
+#[derive(Ser, Deser)]
+pub struct EditorSelection {
+    #[serde(rename = "startLineNumber")]
+    pub start_line   : usize,
+    #[serde(rename = "startColumn")]
+    pub start_column : usize,
+    #[serde(rename = "endLineNumber")]
+    pub end_line     : usize,
+    #[serde(rename = "endColumn")]
+    pub end_column   : usize
+}
+#[derive(Ser, Deser)]
+pub struct EditorSetSelection {
+    #[serde(rename = "selectionStartLineNumber")]
+    pub start_line   : usize,
+    #[serde(rename = "selectionStartColumn")]
+    pub start_column : usize,
+    #[serde(rename = "positionLineNumber")]
+    pub end_line     : usize,
+    #[serde(rename = "positionColumn")]
+    pub end_column   : usize
+}
+#[derive(Ser, Deser)]
+pub struct EditorPosition {
+    #[serde(rename = "lineNumber")]
+    pub line   : usize,
+    pub column : usize
 }
 
 

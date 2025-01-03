@@ -2,10 +2,10 @@
 
 
 use crate::state::FilesEntryKind;
-use super::monaco;
+use super::monaco::{ self, EditorPosition, EditorSelection, EditorSetSelection };
 use voxidian_editor_common::packet::s2c::FileContents;
 use voxidian_editor_common::packet::c2s::PatchFileC2SPacket;
-use voxidian_editor_common::dmp::{ DiffMatchPatch, Patches, PatchInput, Efficient };
+use voxidian_editor_common::dmp::{ DiffMatchPatch, Efficient, PatchInput, Patches };
 
 
 pub fn send_patches_to_server() {
@@ -48,17 +48,52 @@ pub fn apply_patches_from_server(id : u32, patches : Patches<Efficient>) {
     for i in 0..containers.length() {
         let container = containers.get_with_index(i).unwrap();
         if (container.get_attribute("editor_code_file_id").unwrap() == id_string) {
-            let client_editor = &monaco::EDITORS.read()[&id];
-            let client_model  = client_editor.get_model();
-            let client_text   = client_model.get_value(1);
-            let selections    = client_editor.get_selections();
+            let client_editor   = &monaco::EDITORS.read()[&id];
+            let client_model    = client_editor.get_model();
+            let old_client_text = client_model.get_value(1);
+            let mut selections  = client_editor.get_selections().into_iter().map(|s| {
+                let s = serde_wasm_bindgen::from_value::<EditorSelection>(s).unwrap();
+                Selection {
+                    start : client_model.get_offset_at(serde_wasm_bindgen::to_value(&EditorPosition { line : s.start_line, column : s.start_column }).unwrap()),
+                    end   : client_model.get_offset_at(serde_wasm_bindgen::to_value(&EditorPosition { line : s.end_line,   column : s.end_column   }).unwrap())
+                }
+            }).collect::<Vec<_>>();
 
             let dmp = DiffMatchPatch::new();
-            let (client_text, _) = dmp.patch_apply(&patches, &client_text).unwrap();
+            let (new_client_text, _) = dmp.patch_apply(&patches, &old_client_text).unwrap();
+            for selection in &mut selections {
+                selection.start = check_cursor(&old_client_text, &new_client_text, selection.start);
+                selection.end   = check_cursor(&old_client_text, &new_client_text, selection.end);
+            }
 
-            client_model.set_value(&client_text);
-            client_editor.set_selections(selections);
+            client_model.set_value(&new_client_text);
+            
+            client_editor.set_selections(selections.into_iter().map(|s| {
+                let start = serde_wasm_bindgen::from_value::<EditorPosition>(client_model.get_position_at(s.start )).unwrap();
+                let end   = serde_wasm_bindgen::from_value::<EditorPosition>(client_model.get_position_at(s.end   )).unwrap();
+                serde_wasm_bindgen::to_value(&EditorSetSelection {
+                    start_line   : start.line,
+                    start_column : start.column,
+                    end_line     : end.line,
+                    end_column   : end.column
+                }).unwrap()
+            }).collect::<Vec<_>>());
             break;
         }
     }
+}
+
+fn check_cursor(old_client_text : &str, new_client_text : &str, index : usize) -> usize {
+    let old_slice = old_client_text.chars().enumerate().filter_map(|(i, ch)| (i < index).then(|| ch)).collect::<Vec<_>>();
+    let new_slice = new_client_text.chars().enumerate().filter_map(|(i, ch)| (i < index).then(|| ch)).collect::<Vec<_>>();
+    let is_front = old_slice != new_slice;
+    if (is_front) {
+        let diff = (old_client_text.chars().count() as isize) - (new_client_text.chars().count() as isize);
+        index.saturating_sub_signed(diff)
+    } else { index }
+}
+
+pub struct Selection {
+    start : usize,
+    end   : usize
 }
