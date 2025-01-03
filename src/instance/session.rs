@@ -3,6 +3,7 @@ use crate::instance::EditorInstanceState;
 use voxidian_editor_common::packet::{ PacketBuf, PrefixedPacketEncode, PrefixedPacketDecode };
 use voxidian_editor_common::packet::s2c::*;
 use voxidian_editor_common::packet::c2s::C2SPackets;
+use voxidian_editor_common::dmp::{ DiffMatchPatch, Patches, PatchInput, Efficient };
 use voxidian_database::{ DBSubserverFileEntityKind, DBSubserverFileID, DBSubserverID };
 use std::time::{ Instant, Duration };
 use std::sync::mpmc;
@@ -32,14 +33,49 @@ pub(super) enum MaybePendingEditorSessionState {
 }
 
 
+#[derive(Clone, Copy)]
+pub enum EditorSessionStopReason {
+    ServerShutDown,
+    LoggedInElsewhere,
+    SessionClosed
+}
+impl EditorSessionStopReason {
+    fn as_str(self) -> &'static str { match (self) {
+        Self::ServerShutDown    => "Shutting down",
+        Self::LoggedInElsewhere => "Logged in from another location",
+        Self::SessionClosed     => "Session closed"
+    } }
+}
+
+
 enum EditorSessionOutgoingEvent {
 
-    Stop
+    // Sent to a session to stop it.
+    Stop(EditorSessionStopReason),
+
+    /// A file patch from the client was acknowledged. Apply it to the Server Shadow.
+    PatchShadow {
+        id      : DBSubserverFileID,
+        patches : Patches<Efficient>
+    },
+
+    /// A new Server Text snapshot is available. Diff it against the Server Shadow and send the patches to the client.
+    FileContentsPatchToClient {
+        id          : DBSubserverFileID,
+        server_text : String
+    }
 
 }
 enum EditorSessionIncomingEvent {
 
-    Stop
+    // Sent back to the instance to acknowledged a stop command.
+    Stop,
+
+    /// Some patches were received from the client. Apply it to the Server Text.
+    FilePatchFromClient {
+        id      : DBSubserverFileID,
+        patches : Patches<Efficient>
+    }
 
 }
 
@@ -47,6 +83,7 @@ pub(super) struct EditorSessionHandle {
     handle            : Option<JoinHandle<()>>,
     outgoing_event_tx : mpmc::Sender<EditorSessionOutgoingEvent>,
     incoming_event_rx : mpmc::Receiver<EditorSessionIncomingEvent>,
+    pending_patches   : Vec<(DBSubserverFileID, Patches<Efficient>)>,
     stopped           : bool
 }
 impl EditorSessionHandle {
@@ -57,19 +94,31 @@ impl EditorSessionHandle {
             outgoing_event_rx, incoming_event_tx
         );
         Self {
-            handle      : Some(spawn(async move {
+            handle            : Some(spawn(async move {
                 let _ = session.run().await;
             })),
             outgoing_event_tx,
             incoming_event_rx,
-            stopped     : false
+            pending_patches   : Vec::new(),
+            stopped           : false
         }
     }
 }
 impl EditorSessionHandle {
 
-    pub fn stop(&self) {
-        let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::Stop);
+    pub fn pending_patches(&mut self) -> &mut Vec<(DBSubserverFileID, Patches<Efficient>)> {
+        &mut self.pending_patches
+    }
+
+    pub fn patch_file_to_client(&self, id : DBSubserverFileID, server_text : String) {
+        let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::FileContentsPatchToClient {
+            id,
+            server_text
+        });
+    }
+
+    pub fn stop(&self, reason : EditorSessionStopReason) {
+        let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::Stop(reason));
     }
 
     pub fn can_drop(&self) -> bool { self.stopped }
@@ -84,6 +133,11 @@ impl EditorSessionHandle {
                 EditorSessionIncomingEvent::Stop => {
                     self.stopped = true;
                     break;
+                },
+
+                EditorSessionIncomingEvent::FilePatchFromClient { id, patches } => {
+                    self.pending_patches.push((id, patches.clone())); // TODO: Use these
+                    let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::PatchShadow { id, patches });
                 }
 
             } }
@@ -93,7 +147,7 @@ impl EditorSessionHandle {
 }
 impl Drop for EditorSessionHandle {
     fn drop(&mut self) {
-        self.stop();
+        self.stop(EditorSessionStopReason::SessionClosed);
         block_on(async {
             self.handle.take().unwrap().await;
             loop { if (self.can_drop()) { break; } }
@@ -159,12 +213,40 @@ impl EditorSession {
         }
         loop {
 
-            // Handle events.
+            // Handle outgoing events.
             while let Ok(events) = self.outgoing_event_rx.try_recv() { match (events) {
-                EditorSessionOutgoingEvent::Stop => {
-                    self.send(DisconnectS2CPacket { reason : "Shutting down".to_string() }).await?;
+
+                EditorSessionOutgoingEvent::Stop(reason) => {
+                    self.send(DisconnectS2CPacket { reason : reason.as_str().to_string() }).await?;
                     self.stop()?;
+                },
+
+                EditorSessionOutgoingEvent::PatchShadow { id, patches } => {
+                    if let Some(old_server_shadow) = self.file_shadows.get_mut(&id) {
+                        let dmp = DiffMatchPatch::new();
+                        if let Ok((new_server_shadow, _)) = dmp.patch_apply(&patches, &old_server_shadow) {
+                            *old_server_shadow = new_server_shadow;
+                        }
+                    }
+                },
+
+                EditorSessionOutgoingEvent::FileContentsPatchToClient { id, server_text } => {
+                    if let Some(server_shadow) = self.file_shadows.get_mut(&id) {
+                        let dmp = DiffMatchPatch::new();
+                        // Server Text is diffed against the Server Shadow.
+                        let diffs = dmp.diff_main::<Efficient>(server_shadow, &server_text).unwrap();
+                        // This returns a list of edits which have been performed on Server Text.
+                        let patches = dmp.patch_make(PatchInput::new_diffs(&diffs)).unwrap();
+                        // Server Text is copied over to Server Shadow.
+                        *server_shadow = server_text;
+                        // The edits are sent to the Client.
+                        self.send(PatchFileS2CPacket {
+                            id,
+                            patches
+                        }).await?;
+                    }
                 }
+
             } }
 
             // Handle incoming messages.
@@ -269,8 +351,15 @@ impl EditorSession {
 
 
             C2SPackets::CloseFile(close_file) => {
-                let id = close_file.id;
-                self.file_shadows.remove(&id);
+                self.file_shadows.remove(&close_file.id);
+            },
+
+
+            C2SPackets::PatchFile(patch_file) => {
+                let _ = self.incoming_event_tx.send(EditorSessionIncomingEvent::FilePatchFromClient {
+                    id      : patch_file.id,
+                    patches : patch_file.patches
+                });
             }
 
 

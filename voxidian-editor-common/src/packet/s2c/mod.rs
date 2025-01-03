@@ -8,6 +8,8 @@ mod initial_state;
 pub use initial_state::*;
 mod overwrite_file;
 pub use overwrite_file::*;
+mod patch_file;
+pub use patch_file::*;
 
 
 use super::*;
@@ -18,5 +20,6 @@ packet_group!{ pub enum S2CPackets {
     Keepalive(KeepaliveS2CPacket),
     LoginSuccess(LoginSuccessS2CPacket),
     InitialState(InitialStateS2CPacket),
-    OvewriteFile(OverwriteFileS2CPacket)
+    OvewriteFile(OverwriteFileS2CPacket),
+    PatchFile(PatchFileS2CPacket)
 } }

@@ -1,4 +1,5 @@
 mod monaco;
+pub mod diffsync;
 
 
 pub fn open_noopen() { open("editor_right_main_noopen"); }

@@ -1,7 +1,8 @@
 use crate::state::{ FilesEntry, FilesEntryKind };
 use voxidian_editor_common::packet::{ PacketBuf, PacketEncode, PrefixedPacketEncode, PrefixedPacketDecode };
-use voxidian_editor_common::packet::s2c::S2CPackets;
+use voxidian_editor_common::packet::s2c::{ S2CPackets, FileContents };
 use voxidian_editor_common::packet::c2s::*;
+use voxidian_editor_common::dmp::DiffMatchPatch;
 use std::cell::SyncUnsafeCell;
 use std::ops::Deref;
 use std::mem::MaybeUninit;
@@ -10,6 +11,15 @@ use wasm_bindgen::prelude::*;
 use web_sys::{ WebSocket, BinaryType, MessageEvent, ErrorEvent };
 use web_sys::HtmlInputElement;
 use js_sys::{ ArrayBuffer, Uint8Array };
+
+
+#[wasm_bindgen]
+extern "C" {
+
+    #[wasm_bindgen(js_name = "setInterval")]
+    fn set_interval(callback : &JsValue, duration_ms : u32);
+
+}
 
 
 pub static KEEPALIVE_INDEX : AtomicU64 = AtomicU64::new(0);
@@ -94,6 +104,12 @@ fn on_ws_open() {
     WS.send(HandshakeC2SPacket {
         session_code : WS.session_code().to_string(),
     });
+
+    let timeout_callback = Closure::<dyn FnMut() -> ()>::new(move || {
+        crate::code::diffsync::send_patches_to_server();
+    });
+    set_interval(timeout_callback.as_ref().unchecked_ref(), 500);
+    timeout_callback.forget();
 }
 
 
@@ -169,10 +185,19 @@ fn on_ws_message(e : MessageEvent) {
 
 
         S2CPackets::OvewriteFile(overwrite_file) => {
-            let id = overwrite_file.id;
-            if let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = crate::state::FILES.write().get_mut(&id) {
-                crate::filetabs::overwrite(id, path, &overwrite_file.contents);
+            if let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = crate::state::FILES.write().get_mut(&overwrite_file.id) {
+                crate::filetabs::overwrite(overwrite_file.id, path, &overwrite_file.contents);
                 *is_open = Some(Some(overwrite_file.contents));
+            }
+        },
+
+
+        S2CPackets::PatchFile(patch_file) => {
+            if let Some(FilesEntry { kind : FilesEntryKind::File { is_open : Some(Some(FileContents::Text(old_client_shadow))) }, .. }) = crate::state::FILES.write().get_mut(&patch_file.id) {
+                let dmp = DiffMatchPatch::new();
+                let (new_client_shadow, _) = dmp.patch_apply(&patch_file.patches, &old_client_shadow).unwrap();
+                *old_client_shadow = new_client_shadow;
+                crate::code::diffsync::apply_patches_from_server(patch_file.id, patch_file.patches);
             }
         }
 

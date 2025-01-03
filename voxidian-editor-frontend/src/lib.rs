@@ -23,7 +23,6 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    //code::monaco::create("fn main() {\n    println!(\"Hello, World!\");\n}\n".to_string(), "rust".to_string());
     ws::start();
 }
 
