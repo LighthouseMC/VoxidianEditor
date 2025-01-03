@@ -1,3 +1,5 @@
+use crate::state::{ FilesEntry, FilesEntryKind };
+use voxidian_editor_common::packet::s2c::FileContents;
 use wasm_bindgen::prelude::*;
 
 
@@ -23,8 +25,15 @@ pub fn open(id : u32, path : &str) {
     found.unwrap_or_else(|| {
         let div = document.create_element("div").unwrap();
         div.class_list().toggle_with_force("hbox", true).unwrap();
+        div.set_attribute("editor_filetab_file_id", &id.to_string()).unwrap();
         div.set_attribute("editor_filetab_file_path", path).unwrap();
-        div.set_inner_html(path.split("/").last().unwrap());
+
+        let name = document.create_element("div").unwrap();
+        name.class_list().toggle_with_force("editor_filetab_name", true).unwrap();
+        name.set_inner_html(path.split("/").last().unwrap());
+        let open_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::open_file(id));
+        name.add_event_listener_with_callback("click", open_callback.as_ref().unchecked_ref()).unwrap();
+        open_callback.forget();
 
         let close = document.create_element("div").unwrap();
         close.class_list().toggle_with_force("editor_filetab_close", true).unwrap();
@@ -33,6 +42,7 @@ pub fn open(id : u32, path : &str) {
         close.add_event_listener_with_callback("click", close_callback.as_ref().unchecked_ref()).unwrap();
         close_callback.forget();
 
+        div.append_child(&name).unwrap();
         div.append_child(&close).unwrap();
         filetabs.insert_before(&div, before.as_ref()).unwrap();
         div
@@ -54,24 +64,36 @@ pub fn close(path : &str) {
     for i in 0..children.length() {
         let tab = children.get_with_index(i).unwrap();
         if (tab.get_attribute("editor_filetab_file_path").unwrap() == path) {
+            let id = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u32>().unwrap();
+            crate::code::destroy_monaco(id);
             if (tab.id() == "editor_filetab_selected") {
-                found = Some((i > 0).then(|| i - 1));
+                tab.remove_attribute("id").unwrap();
+                found = Some(i.saturating_sub(1));
             }
             filetabs.remove_child(&tab).unwrap();
             break;
         }
     }
-    match (found) {
-        Some(Some(i)) => {
-            let tab  = children.get_with_index(i).unwrap();
+    match (found.map(|i| filetabs.children().get_with_index(i))) {
+        Some(Some(tab)) => {
             tab.set_id("editor_filetab_selected");
+            let id   = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u32>().unwrap();
             let path = tab.get_attribute("editor_filetab_file_path").unwrap();
             set_filepath(&path);
             crate::filetree::open(&path);
+            if let Some(FilesEntry { kind : FilesEntryKind::File { is_open }, .. }) = crate::state::FILES.read().get(&id) {
+                match (is_open) {
+                    Some(Some(FileContents::Text(_))) => { crate::code::open_monaco(id); },
+                    Some(Some(FileContents::NonText)) => { crate::code::open_nontext(); },
+                    Some(None) => { crate::code::open_load(); },
+                    None => { crate::code::open_noopen(); }
+                }
+            }
         },
         Some(None) => {
             clear_filepath();
             crate::filetree::close(path);
+            crate::code::open_noopen();
         },
         None => { }
     }
@@ -101,8 +123,28 @@ fn set_filepath(path : &str) {
 }
 
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen]
-    fn alert(message : &str);
+pub fn overwrite(id : u32, path : &str, contents : &FileContents) {
+    let window   = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+
+    // File tab
+    let filetabs = document.get_element_by_id("editor_filetabs").unwrap();
+    let children = filetabs.children();
+    for i in 0..children.length() {
+        let tab = children.get_with_index(i).unwrap();
+        if (tab.get_attribute("editor_filetab_file_path").unwrap() == path) {
+            if (tab.id() == "editor_filetab_selected") {
+                match (contents) {
+                    FileContents::NonText => { crate::code::open_nontext(); },
+                    FileContents::Text(text) => { crate::code::create_monaco(id, text, true) },
+                }
+            } else {
+                match (contents) {
+                    FileContents::NonText => { },
+                    FileContents::Text(text) => { crate::code::create_monaco(id, text, false) },
+                }
+            }
+            break;
+        }
+    }
 }

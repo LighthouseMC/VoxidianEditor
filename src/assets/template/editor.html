@@ -256,6 +256,10 @@
                 color: #a6f500;
                 border-bottom: 1px solid #bfbfbf;
             }
+            #editor_filetabs > * .editor_filetab_name {
+                width: min-content;
+                height: min-content;
+            }
             #editor_filetabs > * .editor_filetab_close {
                 margin-left: 8px;
                 width: min-content;
@@ -298,6 +302,15 @@
                 width: 100%;
                 height: 100%;
             }
+            #editor_right_main_container > * {
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.125s;
+            }
+            #editor_right_main_container > *.editor_right_main_selected {
+                pointer-events: all;
+                opacity: 1;
+            }
             #editor_right_main_container #editor_right_main_noopen {
                 position: absolute;
                 left: 0;
@@ -322,6 +335,17 @@
                 align-items: center;
                 text-align: center;
             }
+            #editor_right_main_container #editor_right_main_loader {
+                position: absolute;
+                left: 0;
+                right: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+            }
             #editor_right_main_container #editor_right_main_nontext h1 {
                 margin: 0 auto;
                 max-width: 450px;
@@ -340,7 +364,7 @@
                 font-style: normal;
                 color: white;
             }
-            #editor_right_main_container #editor_code_container {
+            #editor_right_main_container .editor_code_container {
                 position: absolute;
                 left: 0;
                 right: 0;
@@ -349,7 +373,7 @@
                 width: 100%;
                 height: 100%;
             }
-            #editor_right_main_container #editor_code_container #editor_code {
+            #editor_right_main_container .editor_code_container .editor_code {
                 width: 100%;
                 height: 100%;
             }
@@ -526,12 +550,14 @@
                     </div>
 
                     <div id="editor_right_main_container">
-                        <div id="editor_right_main_noopen"></div>
-                        <div id="editor_right_main_nontext" style="visibility: hidden;">
+                        <div id="editor_right_main_noopen" class="editor_right_main_selected"></div>
+                        <div id="editor_right_main_nontext">
                             <h1>⚠</h1>
                             <h2>The file is not displayed in the text editor because it is either binary or uses an unsupported text encoding.</h2>
                         </div>
-                        <!--div id="editor_code_container" style="visibility: hidden;"><div id="editor_code"></div></div-->
+                        <div id="editor_right_main_loader">
+                            <div class="loader"><div></div><div></div><div></div></div>
+                        </div>
                     </div>
 
                     <div id="editor_footer" class="hbox">
@@ -555,13 +581,22 @@
             </div>
         </div>
 
-        <script type="module">
+        <script src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script> <!-- Code editor -->
+        <script> // Code editor
+            /*document.addEventListener("keydown", function (event) { // TODO: Translate to Rust and improve.
+                if (event.ctrlKey || event.altKey) {
+                    event.preventDefault();
+                }
+            });*/
+        </script>
+
+        <script type="module"> // WASM
             import init, * as wasm from "/editor/voxidian_editor_frontend.js";
             init();
-        </script> <!-- Server-client communication -->
+        </script>
 
-        <script> // Drag to resize editor filetree.
-            const e_editor_left          = document.getElementById("editor_left");
+        <script> // Drag to resize editor filetree. // TODO: Translate to Rust
+            /*const e_editor_left          = document.getElementById("editor_left");
             const e_editor_resize_hsplit = document.getElementById("editor_resize_hsplit");
             let dragging_filetree_resize = false;
             function start_dragging_filetree_resize() {
@@ -587,11 +622,11 @@
                         e_editor_left.style.width = Math.max(event.clientX, dragging_filetree_resize_collapse_threshold) + "px";
                     }
                 }
-            });
+            });*/
         </script>
 
-        <script> // Subserver properties editor
-            const e_subserver_properties_editor = document.getElementById("subserver_properties_editor");
+        <script> // Subserver properties editor // TODO: Translate to Rust
+            /*const e_subserver_properties_editor = document.getElementById("subserver_properties_editor");
             let subserver_properties_editor_open = false;
             let subserver_properties_editor_closing = false;
             function open_subserver_properties_editor() {
@@ -613,79 +648,7 @@
                         }, 125);
                     }
                 }
-            });
-        </script>
-
-        <script src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script> <!-- Code editor -->
-        <script> // Code editor
-            const e_editor_footer_cursor_line     = document.getElementById("editor_footer_cursor_line");
-            const e_editor_footer_cursor_column   = document.getElementById("editor_footer_cursor_column");
-            const e_editor_footer_cursor_offset   = document.getElementById("editor_footer_cursor_offset");
-            const e_editor_footer_cursor_selected = document.getElementById("editor_footer_cursor_selected");
-
-            require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@latest/min/vs' }});
-
-            let editor_code;
-            /*require(["vs/editor/editor.main"], () => {
-
-                monaco.editor.onDidCreateEditor((editor) => {
-                    editor.layout();
-                    editor_code = editor;
-                });
-
-                let req = new XMLHttpRequest();
-                req.open("GET", "https://raw.githubusercontent.com/rafmsou/nicer-high-contrast/refs/heads/master/themes/Nicer%20High%20Contrast-color-theme.json", false);
-                req.send(null);
-                let resp = req.responseText.split("\n").map((line) => line.trim()).filter((line) => ! line.startsWith("//")).join("").replace(",}", "}");
-                let theme = JSON.parse(resp);
-                theme.base = "hc-black"
-                theme.inherit = true;
-                theme.rules = [];
-                monaco.editor.defineTheme("nhc-black", theme);
-
-                editor_code = monaco.editor.create(document.getElementById("editor_code"), {
-                    value: "fn main() {\n    println!(\"Hello, World!\");\n}\n",
-                    language: "plain",
-                    theme: "nhc-black",
-                    autoDetectHighContrast: false,
-                    automaticLayout: true,
-                    cursorBlinking: "smooth",
-                    fontFamily: "Fira Code",
-                    fontLigatures: true,
-                    fontSize: 13,
-                    fontWeight: "350",
-                    minimap: {
-                        showSlider: "always",
-                        size: "proportional"
-                    },
-                    renderFinalNewline: "dimmed",
-                    smoothScrolling: true
-                });
-
-                editor_code.onDidChangeCursorSelection((event) => {
-                    let start        = event.selection.getStartPosition();
-                    let end          = event.selection.getEndPosition();
-                    let start_offset = editor_code.getModel().getOffsetAt(start);
-                    let end_offset   = editor_code.getModel().getOffsetAt(end);
-                    e_editor_footer_cursor_line.innerText = "" + start.lineNumber;
-                    e_editor_footer_cursor_column.innerText = "" + start.column;
-                    let selected = end_offset - start_offset;
-                    if (selected > 0) {
-                        e_editor_footer_cursor_offset.innerText = start_offset + "-" + end_offset;
-                        e_editor_footer_cursor_selected.innerText = " (" + (end_offset - start_offset) + " selected)";
-                    } else {
-                        e_editor_footer_cursor_offset.innerText = start_offset;
-                        e_editor_footer_cursor_selected.innerText = "";
-                    }
-                });
             });*/
-
-            document.addEventListener("keydown", function (event) {
-                if (event.ctrlKey || event.altKey) {
-                    event.preventDefault();
-                }
-            });
-
         </script>
 
     </body>

@@ -3,10 +3,12 @@ use crate::instance::EditorInstanceState;
 use voxidian_editor_common::packet::{ PacketBuf, PrefixedPacketEncode, PrefixedPacketDecode };
 use voxidian_editor_common::packet::s2c::*;
 use voxidian_editor_common::packet::c2s::C2SPackets;
-use voxidian_database::{ DBSubserverFileEntityKind, DBSubserverID };
+use voxidian_database::{ DBSubserverFileEntityKind, DBSubserverFileID, DBSubserverID };
 use std::time::{ Instant, Duration };
 use std::sync::mpmc;
 use std::sync::Arc;
+use std::collections::HashMap;
+use std::str;
 use async_std::sync::RwLock;
 use async_std::stream::StreamExt;
 use async_std::task::{ block_on, spawn, yield_now, JoinHandle };
@@ -105,6 +107,7 @@ pub(super) struct EditorSession {
     subserver         : DBSubserverID,
     last_keepalive    : (Instant, Result<u64, u64>),
     state             : Arc<RwLock<EditorInstanceState>>,
+    file_shadows      : HashMap<DBSubserverFileID, String>,
     ws                : WebSocketContainer,
     outgoing_event_rx : mpmc::Receiver<EditorSessionOutgoingEvent>,
     incoming_event_tx : mpmc::Sender<EditorSessionIncomingEvent>
@@ -120,6 +123,7 @@ impl EditorSession {
         subserver,
         last_keepalive    : (Instant::now(), Ok(0)),
         state,
+        file_shadows      : HashMap::new(),
         ws,
         outgoing_event_rx,
         incoming_event_tx
@@ -221,10 +225,12 @@ impl EditorSession {
     async fn handle_incoming_message(&mut self, packet : C2SPackets) -> Result<(), ()> {
         match (packet) {
 
+
             C2SPackets::Handshake(_) => {
                 self.send(DisconnectS2CPacket { reason : "An error occured: Out of order handshake".to_string() }).await?;
                 self.stop()?;
             },
+
 
             C2SPackets::Keepalive(keepalive) => { match (self.last_keepalive.1) {
                 Ok(expected_keepalive_index) => {
@@ -242,13 +248,31 @@ impl EditorSession {
                 },
             } },
 
+
             C2SPackets::OpenFile(open_file) => {
-                todo!()
+                let id = open_file.id;
+                if let Some((_, DBSubserverFileEntityKind::File(data))) = self.state.write().await.file_entities().get(&id) {
+                    if let Ok(text) = str::from_utf8(data) {
+                        let _ = self.file_shadows.insert(id, text.to_string());
+                        self.send(OverwriteFileS2CPacket {
+                            id,
+                            contents : FileContents::Text(text.to_string())
+                        }).await?;
+                    } else {
+                        self.send(OverwriteFileS2CPacket {
+                            id,
+                            contents : FileContents::NonText
+                        }).await?;
+                    }
+                }
             },
 
+
             C2SPackets::CloseFile(close_file) => {
-                todo!()
+                let id = close_file.id;
+                self.file_shadows.remove(&id);
             }
+
 
         }
         Ok(())

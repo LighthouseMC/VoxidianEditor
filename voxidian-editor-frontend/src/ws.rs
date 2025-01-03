@@ -1,3 +1,4 @@
+use crate::state::{ FilesEntry, FilesEntryKind };
 use voxidian_editor_common::packet::{ PacketBuf, PacketEncode, PrefixedPacketEncode, PrefixedPacketDecode };
 use voxidian_editor_common::packet::s2c::S2CPackets;
 use voxidian_editor_common::packet::c2s::*;
@@ -14,8 +15,8 @@ use js_sys::{ ArrayBuffer, Uint8Array };
 pub static KEEPALIVE_INDEX : AtomicU64 = AtomicU64::new(0);
 
 
-static WS : WebSocketContainer = WebSocketContainer::new();
-struct WebSocketContainer {
+pub static WS : WebSocketContainer = WebSocketContainer::new();
+pub struct WebSocketContainer {
     ws           : SyncUnsafeCell<MaybeUninit<WebSocket>>,
     session_code : SyncUnsafeCell<MaybeUninit<String>>
 }
@@ -168,7 +169,11 @@ fn on_ws_message(e : MessageEvent) {
 
 
         S2CPackets::OvewriteFile(overwrite_file) => {
-            todo!()
+            let id = overwrite_file.id;
+            if let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = crate::state::FILES.write().get_mut(&id) {
+                crate::filetabs::overwrite(id, path, &overwrite_file.contents);
+                *is_open = Some(Some(overwrite_file.contents));
+            }
         }
 
 

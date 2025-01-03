@@ -3,8 +3,8 @@ use super::*;
 
 #[derive(Debug)]
 pub struct OverwriteFileS2CPacket {
-    id       : u32,
-    contents : FileContents
+    pub id       : u32,
+    pub contents : FileContents
 }
 
 impl PacketMeta for OverwriteFileS2CPacket {
@@ -30,8 +30,8 @@ impl PacketDecode for OverwriteFileS2CPacket {
             id       : buf.read_decode()?,
             contents : {
                 let is_text = buf.read_decode::<bool>()?;
-                if (is_text) { FileContents::NonText }
-                else { FileContents::Text(buf.read_decode()?) }
+                if (is_text) { FileContents::Text(buf.read_decode()?) }
+                else { FileContents::NonText }
             }
         })
     }
