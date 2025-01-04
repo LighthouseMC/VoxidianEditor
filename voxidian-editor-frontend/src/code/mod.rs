@@ -1,5 +1,6 @@
-mod monaco;
+    mod monaco;
 pub mod diffsync;
+pub mod remote_cursors;
 
 
 pub fn open_noopen() { open("editor_right_main_noopen"); }

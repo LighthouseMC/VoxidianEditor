@@ -87,21 +87,25 @@ mod js { use super::*;
         #[wasm_bindgen(method, js_name = "getPositionAt")]
         pub fn get_position_at(this : &EditorModel, offset : usize) -> JsValue;
 
+        /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.ITextModel.html#deltaDecorations.deltaDecorations-1
+        #[wasm_bindgen(method, js_name = "deltaDecorations")]
+        pub fn delta_decorations(this : &EditorModel, old_decorations : Vec<String>, new_decorations : Vec<JsValue>) -> JsValue;
+
     }
 
 }
 
 
-#[derive(Ser)]
+#[derive(Ser, Deser)]
 struct MonacoConfig {
     paths : MonacoConfigPaths
 }
-#[derive(Ser)]
+#[derive(Ser, Deser)]
 struct MonacoConfigPaths {
     vs : String
 }
 
-#[derive(Ser)]
+#[derive(Ser, Deser)]
 struct EditorConfig {
     value                     : String,
     language                  : String,
@@ -126,7 +130,7 @@ struct EditorConfig {
     #[serde(rename = "smoothScrolling")]
     smooth_scrolling          : bool
 }
-#[derive(Ser)]
+#[derive(Ser, Deser)]
 struct EditorConfigMinimap {
     #[serde(rename = "showSlider")]
     show_slider : String,
@@ -162,8 +166,28 @@ pub struct EditorPosition {
     pub column : usize
 }
 
+#[derive(Ser, Deser)]
+pub struct EditorDecoration {
+    pub options : EditorDecorationOptions,
+    pub range   : EditorSelection
+}
+#[derive(Ser, Deser)]
+pub struct EditorDecorationOptions {
+    #[serde(rename = "className")]
+    pub class_name    : String,
+    #[serde(rename = "hoverMessage")]
+    pub hover_message : EditorHoverMessage,
+    #[serde(rename = "isWholeLine")]
+    pub is_whole_line : bool,
+    pub stickiness    : u8
+}
+#[derive(Ser, Deser)]
+pub struct EditorHoverMessage {
+    pub value : String
+}
 
-pub fn create(id : u32, initial_script : String, initial_language : String, open : bool) {
+
+pub fn create(id : u32, initial_script : String, initial_language : String, open : bool) { // TODO: Edit history undo/redo
     require(move || {
         let window   = web_sys::window().unwrap();
         let document = window.document().unwrap();

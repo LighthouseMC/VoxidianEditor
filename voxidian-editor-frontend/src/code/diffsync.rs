@@ -62,8 +62,10 @@ pub fn apply_patches_from_server(id : u32, patches : Patches<Efficient>) {
             let dmp = DiffMatchPatch::new();
             let (new_client_text, _) = dmp.patch_apply(&patches, &old_client_text).unwrap();
             for selection in &mut selections {
-                selection.start = check_cursor(&old_client_text, &new_client_text, selection.start);
-                selection.end   = check_cursor(&old_client_text, &new_client_text, selection.end);
+                // TODO: Fix cursor shifting.
+                let start = selection.start;
+                selection.start = check_cursor(&old_client_text, &new_client_text, selection.start, true);
+                selection.end   = check_cursor(&old_client_text, &new_client_text, selection.end, selection.end == start);
             }
 
             client_model.set_value(&new_client_text);
@@ -78,14 +80,33 @@ pub fn apply_patches_from_server(id : u32, patches : Patches<Efficient>) {
                     end_column   : end.column
                 }).unwrap()
             }).collect::<Vec<_>>());
+
+            /*client_model.delta_decorations(vec![], vec![
+                serde_wasm_bindgen::to_value(&super::monaco::EditorDecoration {
+                    options : super::monaco::EditorDecorationOptions {
+                        class_name    : "editor_code_remote_selection_18".to_string(),
+                        hover_message : super::monaco::EditorHoverMessage { value : "Random person".to_string() },
+                        is_whole_line : false,
+                        stickiness    : 1
+                    },
+                    range   : EditorSelection {
+                        start_line   : 2,
+                        start_column : 2,
+                        end_line     : 2,
+                        end_column   : 2
+                    }
+                }).unwrap()
+            ]);*/
+
             break;
         }
     }
 }
 
-fn check_cursor(old_client_text : &str, new_client_text : &str, index : usize) -> usize {
-    let old_slice = old_client_text.chars().enumerate().filter_map(|(i, ch)| (i < index).then(|| ch)).collect::<Vec<_>>();
-    let new_slice = new_client_text.chars().enumerate().filter_map(|(i, ch)| (i < index).then(|| ch)).collect::<Vec<_>>();
+fn check_cursor(old_client_text : &str, new_client_text : &str, index : usize, before : bool) -> usize {
+    let before    = before as usize;
+    let old_slice = old_client_text.chars().enumerate().filter_map(|(i, ch)| (i < index + before).then(|| ch)).collect::<Vec<_>>();
+    let new_slice = new_client_text.chars().enumerate().filter_map(|(i, ch)| (i < index + before).then(|| ch)).collect::<Vec<_>>();
     let is_front = old_slice != new_slice;
     if (is_front) {
         let diff = (old_client_text.chars().count() as isize) - (new_client_text.chars().count() as isize);

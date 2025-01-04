@@ -10,6 +10,8 @@ mod overwrite_file;
 pub use overwrite_file::*;
 mod patch_file;
 pub use patch_file::*;
+mod selections;
+pub use selections::*;
 
 
 use super::*;
@@ -21,5 +23,6 @@ packet_group!{ pub enum S2CPackets {
     LoginSuccess(LoginSuccessS2CPacket),
     InitialState(InitialStateS2CPacket),
     OvewriteFile(OverwriteFileS2CPacket),
-    PatchFile(PatchFileS2CPacket)
+    PatchFile(PatchFileS2CPacket),
+    //Selections(SelectionsS2CPacket)
 } }

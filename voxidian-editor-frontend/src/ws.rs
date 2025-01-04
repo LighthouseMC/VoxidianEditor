@@ -95,7 +95,7 @@ fn on_ws_error(e : ErrorEvent) {
 
 
 fn on_ws_close() {
-    crate::cover::open_cover_error(&format!("<b>Server disconnected</b>"));
+    crate::cover::open_cover_error(&format!("<b>Server disconnected</b><br />Something went wrong."));
     let _ = WS.close();
 }
 

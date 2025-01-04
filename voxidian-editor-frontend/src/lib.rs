@@ -24,6 +24,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn start() {
+    code::remote_cursors::init_css();
     ws::start();
 }
 
@@ -35,4 +36,6 @@ extern "C" {
     fn alert(message : &str);
     #[wasm_bindgen(js_namespace = console)]
     fn warn(msg : &str);
+    #[wasm_bindgen(js_namespace = console, js_name = warn)]
+    fn warnjs(msg : JsValue);
 }
